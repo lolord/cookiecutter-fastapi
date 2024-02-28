@@ -177,7 +177,25 @@ Add additional notes about how to deploy this on a live system
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-### FAQ
+## Note
+
+#### Response 是一个Generic Model
+
+使用时指明route的response_model可以生成更友好的API文档
+
+``` python
+@router.get(response_model=Resp[bool])
+```
+
+#### middleware的request参数不是FastAPI的request
+
+两个Request不是同一个对象, 所以不要在middleware中读取body数据, path, query, header等参数是可以.
+
+#### API依赖参数是BaseModel类型时, exclude_unset可能不起作用
+
+dependencies解决依赖参数时会从Signature提取到默认值, BaseModel接收到默认值, 不会将字段标记为未赋值
+
+## FAQ
 
 #### files.pythonhosted.org timeout
 
