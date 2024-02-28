@@ -1,0 +1,60 @@
+[project]
+name = "{{cookiecutter.project_name}}"
+version = "{{cookiecutter.version}}"
+description = "{{cookiecutter.description}} "
+authors = [{ name = "{{cookiecutter.author}}", email = "{{cookiecutter.email}}" }]
+dependencies = [
+    "pydantic>=2.5.2",
+    "fastapi>=0.110.0",
+    "orjson>=3.8.9",
+    "authlib>=1.2.0",
+    "flake8>=6.0.0",
+    "odmantic>=1.0.0",
+    "bson>=0.5.10",
+    "loguru>=0.6.0",
+    "python-dotenv>=1.0.0",
+    "jose==1.0.0",
+    "typing-extensions>=4.2.0",
+    "email-validator>=1.0.3",
+    "dnspython>=2.0.0",
+    "idna>=2.0.0",
+    "ecdsa==0.18.0",
+    "pyasn1==0.5.0",
+    "python-jose==3.3.0",
+    "rsa==4.9",
+    "passlib==1.7.4",
+    "redis==4.3.3",
+    "aioredis>=2.0.0",
+    "celery==5.2.7",
+    "psutil",
+    "uvicorn>=0.27.1",
+    "python-multipart>=0.0.9",
+    "bcrypt>=4.1.2",
+    "httpx>=0.27.0",
+    "pytest>=8.0.2",
+    "pydantic-settings>=2.2.1",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+
+[build-system]
+requires = ['hatchling', 'hatch-fancy-pypi-readme>=22.5.0']
+build-backend = 'hatchling.build'
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.sdist]
+include = ['/{{cookiecutter.project_name}}', '/tests', '/requirements']
+
+
+[tool.pdm]
+distribution = true
+# pdm config pypi.url "https://pypi.tuna.tsinghua.edu.cn/simple/"
+
+
+[tool.codespell]
+skip = '**/swagger-ui-bundle.min.js,**/nginx_https.conf,**/nginx.conf'
+ignore-words-list = 'statics'

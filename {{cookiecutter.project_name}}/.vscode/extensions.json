@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "ms-python.isort",
+        "njpwerner.autodocstring",
+        "chouzz.vscode-better-align",
+        "hediet.vscode-drawio",
+        "shd101wyy.markdown-preview-enhanced"
+    ]
+}

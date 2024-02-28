@@ -1,0 +1,15 @@
+# python
+__pycache__
+
+# app
+.dev.env
+.prod.env
+
+.pytest_cache
+.hypothesis
+logs
+pdm.lock
+.coverage
+.ruff_cache
+.venv
+.pdm-python
