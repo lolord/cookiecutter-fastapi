@@ -13,7 +13,7 @@
 - Automated testing and coverage report
 - Devcontainer
 
-### Prerequisites
+## Prerequisites
 
 What things you need to install the software and how to install them
 
@@ -153,11 +153,23 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 ```
 
+### supervisor
+
+[program:project_name]
+directory=/app
+command=uvicorn main:app --host 0.0.0.0 --port 5000
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stderr_logfile=/var/log/supervisor/%(program_name)s.err.log
+stdout_logfile=/var/log/supervisor/%(program_name)s.out.log
+
 ### Makefile
 
 - install: Install the package, dependencies, and pre-commit for local development
 - format: Auto-format python source files
-- lin: Lint python source files
+- lint: Lint python source files
 - codespell: Use Codespell to do spellchecking
 - typecheck: Perform type-checking
 - test: Run all tests, skipping the type-checker integration tests
@@ -177,11 +189,18 @@ Add additional notes about how to deploy this on a live system
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-## Note
+## FAQ
+
+#### 请使用`anyio`
+
+`Starlette`是依赖`anyio`的，`FastAPI`是基于`Starlette`的, 所以请使用`anyio`
+`anyio`兼容`asyncio`和`trio`
+
+特别是，您可以直接使用AnyIO的适用于需要在自己的代码中加入更高级模式的高级并发用例。
 
 #### Response 是一个Generic Model
 
-使用时指明route的response_model可以生成更友好的API文档
+使用时指明route的`response_model`可以生成更友好的API文档
 
 ``` python
 @router.get(response_model=Resp[bool])
@@ -195,7 +214,46 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 dependencies解决依赖参数时会从Signature提取到默认值, BaseModel接收到默认值, 不会将字段标记为未赋值
 
-## FAQ
+#### 运行阻塞的代码
+
+不应该直接调用阻塞(CPU-bound)代码
+
+例如，如果一个函数执行1秒的 CPU 密集型计算，那么所有并发异步任务和 IO 操作都将延迟1秒。
+
+可以用执行器在不同的线程甚至不同的进程中运行任务，以避免使用事件循环阻塞 OS 线程
+
+```python
+import time
+
+from anyio import to_thread
+
+
+async def main():
+    await to_thread.run_sync(time.sleep, 1)
+```
+
+#### 并发任务
+
+一个接口中需要请求多个资源时, 可以并发执行, 等待时间取决于耗时最长的任务
+通过`Semaphore`可以控制并发量, 避免对资源(数据库)造成压力
+
+```python
+from anyio import Semaphore, create_task_group, sleep
+
+
+async def run_with_semaphore(func, semaphore):
+    async with semaphore:
+        await func()
+
+
+async def main():
+    semaphore = Semaphore(2)
+    async with create_task_group() as tg:
+        tg.start_soon(run_with_semaphore, get_user, semaphore)
+        tg.start_soon(run_with_semaphore, get_roles, semaphore)
+        tg.start_soon(run_with_semaphore, get_permissions, semaphore)
+
+```
 
 #### files.pythonhosted.org timeout
 
