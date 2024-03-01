@@ -255,30 +255,28 @@ async def main():
 
 ```
 
-#### files.pythonhosted.org timeout
-
-HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out.
-
-切换国内镜像源
-
-- 清华大学镜像 <https://pypi.tuna.tsinghua.edu.cn/simple/>
-- 豆瓣镜像 <http://pypi.douban.com/simple/>
-- 阿里镜像 <http://mirrors.aliyun.com/pypi/simple/>
-
-方法1：设置pip全局设置镜像源（推荐）
-
-``` shell
-pip3 config --global set global.index-url https://mirrors.aliyun.com/pypi/simple/
-pip3 config --global set install.trusted-host mirrors.aliyun.com
-```
-
-方法2：安装时指定源
-
-``` shell
-pip3 install <package> -i https://pypi.doubanio.com/simple
-```
-
 #### swagger cdn timeout
 
 1. 切换至国内cdn
 2. 使用静态资源: statics/api-docs/swagger
+
+#### odmantic RuntimeError: attached to a different loop
+
+```shell
+RuntimeError: Task <Task pending coro=<xyz.insertMany() running at <my workspace location>/xyz.py:144> cb=[_run_until_complete_cb() at /usr/lib64/python3.5/asyncio/base_events.py:164]> got Future <Future pending cb=[_chain_future.<locals>._call_check_cancel() at /usr/lib64/python3.5/asyncio/futures.py:431]> attached to a different loop
+```
+
+错误原因: odmantic的io loop不是主进程的event loop
+解决办法: 更改MotorClient的get_io_loop方法
+
+```py
+from motor.motor_asyncio import (
+    AsyncIOMotorClient as MotorClient,
+)
+
+# MongoDB client
+client = MotorClient('mongodb://localhost:27017/test')
+client.get_io_loop = asyncio.get_running_loop
+```
+
+<https://stackoverflow.com/questions/41584243/runtimeerror-task-attached-to-a-different-loop>
