@@ -1,8 +1,8 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, Optional
 
+from api.user import User
 from db import engine
 from fastapi import APIRouter, Body, Depends, Path, Query
-from api.user import User
 from odmantic import ObjectId
 from odmantic.query import in_
 from pydantic import BaseModel, Field, constr
@@ -11,8 +11,8 @@ from schemas import PaginationQuery, PaginationResp, Resp
 from .model import (
     Menu,
     Permission,
-    PermissionID,
     PermissionName,
+    PermissionNames,
     RBACRoute,
     Role,
     RoleID,
@@ -25,11 +25,11 @@ router = APIRouter(
 )
 
 
-class ModelQuery(PaginationQuery):
-    id: Optional[RoleID]
-    name: Optional[str]
-    enabled: Optional[bool]
-    permissions: Optional[PermissionID]
+class RoleQuery(PaginationQuery):
+    id: Optional[RoleID] = None
+    name: Optional[str] = None
+    enabled: Optional[bool] = None
+    permissions: Optional[PermissionName] = None
 
 
 @router.get(
@@ -38,7 +38,7 @@ class ModelQuery(PaginationQuery):
     response_model=PaginationResp[Role],
 )
 async def get_roles(
-    query: ModelQuery = Depends(),
+    query: RoleQuery = Depends(),
 ):
     return await engine.find_pagination(Role, query)
 
@@ -48,40 +48,25 @@ async def get_role(id: RoleID = Path(...)):
     return Resp(data=get_role_profile(id=id))
 
 
-@router.post("/roles", summary="创建角色", response_model=Role)
-async def post_role(
-    name: str = Body(..., min_length=1, max_length=128),
-    enabled: bool = Body(True),
-    permissions: List[PermissionName] = Body([]),
-):
-    role = await engine.find_one(Role, Role.name == name)
-    if role:
-        raise ValueError(f"role: {name} already exists")
+@router.post("/roles", summary="创建角色")
+async def post_role(role: Role = Body(...)) -> Resp[Role]:
+    exists = await engine.count(Role, Role.name == role.name)
+    if exists:
+        raise ValueError(f"role: {role.name} already exists")
 
-    role = Role(name=name, enabled=enabled, permissions=permissions)  # type: ignore
     await engine.save(role)
-    return role
+    return Resp(data=role)
 
 
-@router.put("/roles", summary="编辑角色信息", response_model=Resp[Role])
-async def edit_roles(
-    id: RoleID = Body(...),
-    name: str = Body(None, min_length=3, max_length=14),
-    enabled: Optional[bool] = Body(None),
-    permissions: Optional[List[PermissionName]] = Body(None),
-):
-    role = await engine.find_one(Role, Role.id == id)
-    if not role:
+@router.put("/roles", summary="编辑角色信息")
+async def edit_roles(role: Role = Body(...)) -> Resp[Role]:
+    exists = await engine.exists(Role, Role.id == role.id)
+    if not exists:
         return Resp(code=400, msg="role does not exist.")
     if role.name == "admin":
         return Resp(code=400, msg="Not enough permissions.")
-    if name is not None:
-        role.name = name
-    if enabled is not None:
-        role.enabled = enabled
-    if permissions:
-        role.permissions = permissions
-    return await engine.save(role)
+    role = await engine.save(role)
+    return Resp(data=role)
 
 
 @router.delete(
@@ -145,7 +130,7 @@ async def post_route_permission(
     if permission in route.permissions:
         raise ValueError(f"{permission} already exists")
 
-    route.permissions.append(permission)
+    route.permissions.add(permission)
     await engine.save(route)
     if await engine.find(Permission, in_(Permission.id, list(permission))) == 0:
         await engine.save(Permission(name=permission, creator=user.id))  # type: ignore
@@ -184,7 +169,7 @@ class MenuPost(BaseModel):
     title: str = Field(..., min_length=1, max_length=128)
     description: str = ""
     enabled: bool = True
-    permissions: List[PermissionName] = Field([])
+    permissions: PermissionNames = Field([])
 
 
 @router.post("/menus", summary="新增菜单", response_model=Menu)

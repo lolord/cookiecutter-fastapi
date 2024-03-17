@@ -4,7 +4,7 @@ from typing import List, Optional, TypeAlias
 from odmantic import Field, Index, Model, ObjectId
 from odmantic.query import asc
 from pydantic import EmailStr
-from rbac.model import PermissionName, RoleName
+from rbac.model import PermissionNames, RoleName
 
 UserID: TypeAlias = ObjectId
 
@@ -16,7 +16,7 @@ class User(Model):
     enabled: bool = True
     deleted: int = 0
     roles: List[RoleName] = []
-    permissions: List[PermissionName] = []
+    permissions: PermissionNames = Field([])
 
     u_at: datetime = Field(description="修改时间", default_factory=datetime.now)
 

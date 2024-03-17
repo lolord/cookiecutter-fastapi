@@ -1,12 +1,32 @@
 from datetime import datetime
-from typing import List, Optional, TypeAlias
+from typing import Annotated, List, Optional, Set, TypeAlias
 
-from odmantic import Field, Model, ObjectId
+from odmantic import Field, Model, ObjectId, WithBsonSerializer
+from pydantic import PlainSerializer, StringConstraints
 
 RoleID: TypeAlias = ObjectId
 RoleName: TypeAlias = str
 PermissionID: TypeAlias = ObjectId
-PermissionName: TypeAlias = str
+PermissionName: TypeAlias = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, to_lower=True, min_length=1, max_length=128
+    ),
+]
+
+
+def frozenset_serializer(v):
+    arr = list(v)
+    arr.sort()
+    return arr
+
+
+PermissionNames: TypeAlias = Annotated[
+    Set[PermissionName],
+    # Bson serializer is not require
+    WithBsonSerializer(frozenset_serializer),
+    PlainSerializer(frozenset_serializer, return_type=List[str]),
+]
 
 
 class SYSTEAM_ROLES:
@@ -18,7 +38,7 @@ class SYSTEAM_ROLES:
 class Role(Model):
     name: str = Field(..., unique=True, min_length=1, max_length=128)
     description: str = ""
-    permissions: List[PermissionName] = []
+    permissions: PermissionNames = Field([])
     enabled: bool = True
 
     model_config = {"collection": "role"}
@@ -41,7 +61,7 @@ class RBACRoute(Model):
     tags: List[str] = []
     description: str = ""
     deprecated: bool = False
-    permissions: List[PermissionName] = []
+    permissions: PermissionNames = Field([])
 
     model_config = {"collection": "rbac_route"}
 
@@ -51,6 +71,6 @@ class Menu(Model):
     title: str = Field(..., min_length=1, max_length=128)
     description: str = ""
     enabled: bool = True
-    permissions: List[PermissionName] = Field([])
+    permissions: PermissionNames = Field([])
 
     model_config = {"collection": "menu", "parse_doc_with_default_factories": True}

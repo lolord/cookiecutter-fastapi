@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, Set, cast
+from typing import Optional, cast
 
 from db import engine
 from fastapi import Depends, HTTPException, Request, status
@@ -9,7 +9,7 @@ from models.user import User
 from odmantic.query import in_
 from passlib.context import CryptContext
 from pydantic import EmailStr
-from rbac.model import PermissionName, RBACRoute, Role
+from rbac.model import PermissionNames, RBACRoute, Role
 from schemas import PermissionDeniedError, RBACRouteNotFindError
 from settings import settings
 
@@ -42,8 +42,6 @@ not_enough_permissions = HTTPException(
 
 
 def verify_password(plain_password, hashed_password):
-    print(plain_password, hashed_password)
-    print(type(plain_password), type(hashed_password))
     return pwd_context.verify(plain_password, hashed_password)
 
 
@@ -115,7 +113,7 @@ async def user_exists(email: str) -> bool:
 
 async def get_user_permissions(
     user: User = Depends(get_current_user),
-) -> Set[PermissionName]:
+) -> PermissionNames:
     permissions = set()
     if user.roles:
         async for role in engine.find(Role, in_(Role.name, user.roles)):
@@ -123,7 +121,7 @@ async def get_user_permissions(
     return permissions
 
 
-async def get_api_permissions(request: Request) -> Set[PermissionName]:
+async def get_api_permissions(request: Request) -> PermissionNames:
     """适用于endpoint function dependencies"""
     method = request.method
     path = request.url.path
@@ -156,9 +154,9 @@ async def get_api_permissions(request: Request) -> Set[PermissionName]:
 
 
 async def auth_api_permission(
-    user_permissions: Set[PermissionName] = Depends(get_user_permissions),
-    api_permissions: Set[PermissionName] = Depends(get_api_permissions),
-) -> Set[PermissionName]:
+    user_permissions: PermissionNames = Depends(get_user_permissions),
+    api_permissions: PermissionNames = Depends(get_api_permissions),
+) -> PermissionNames:
     permissions = user_permissions & api_permissions
     if not permissions:
         raise PermissionDeniedError(api_permissions)

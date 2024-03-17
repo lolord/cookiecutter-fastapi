@@ -1,20 +1,21 @@
 import os
 from contextlib import asynccontextmanager
 
-from api import admin, auth, dashboard, user
+from api import admin, auth, dashboard, publics, user
 from extends.logger import logger
 from fastapi import Depends, FastAPI
 from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import JSONResponse
+from fastapi.responses import ORJSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
+from odmantic.exceptions import DocumentParsingError
 from rbac.api import router as rbac_router
 from rbac.service import update_rbac_routes
 from schemas.errors import APIException
-from services.security import (get_current_user, get_user_permissions,
-                               jwt_required)
+from services.security import get_current_user, get_user_permissions, jwt_required
 from settings import settings
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
@@ -26,6 +27,7 @@ app = FastAPI(
     version=settings.VERSION,
     description=settings.DESCRIPTION,
     debug=settings.DEBUG,
+    default_response_class=ORJSONResponse,
 )
 
 
@@ -44,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
+    return ORJSONResponse(
         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
         content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
     )
@@ -52,22 +54,30 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(ValueError)
 async def handler_value_error(request: Request, error: ValueError):
-    return JSONResponse(jsonable_encoder({"msg": str(error)}), status_code=500)
+    if isinstance(error, DocumentParsingError):
+        return ORJSONResponse(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            content=jsonable_encoder(
+                {"detail": error.inner.errors(), "body": error.inner.title}
+            ),
+        )
+    else:
+        return ORJSONResponse(jsonable_encoder({"error": str(error)}), status_code=500)
 
 
 @app.exception_handler(APIException)
 async def handler_timeout_error(request: Request, error: APIException):
-    return JSONResponse(jsonable_encoder(str(error)), status_code=500)
+    return ORJSONResponse(jsonable_encoder(str(error)), status_code=500)
 
 
 @app.exception_handler(HTTPException)
-async def http_error(request: Request, error: APIException):
-    return JSONResponse(jsonable_encoder(repr(error)), status_code=500)
+async def http_error(request: Request, exc: HTTPException):
+    return await http_exception_handler(request, exc)
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,6 +98,7 @@ app.include_router(
     rbac_router, prefix=settings.API_VER, dependencies=[Depends(jwt_required)]
 )
 app.include_router(dashboard.router, prefix=settings.API_VER, tags=["DASHBOARD"])
+app.include_router(publics.router, tags=["PUBLICS"])
 
 
 @app.middleware("http")
@@ -101,7 +112,7 @@ async def set_user(request: Request, call_next):
         ...
 
     if user is not None:
-        user.permissions = list(await get_user_permissions(user))
+        user.permissions = await get_user_permissions(user)
 
     request.scope["user"] = user
 
@@ -119,7 +130,7 @@ async def custom_swagger_ui_html():
         # swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui-bundle.js",
         # swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui.css",
         # from local
-        swagger_js_url="/statics/api-docs/swagger/swagger-ui-bundle.min.js",
+        swagger_js_url="/statics/api-docs/swagger/swagger-ui-bundle.js",
         swagger_css_url="/statics/api-docs/swagger/swagger-ui.css",
         swagger_favicon_url="/statics/api-docs/favicon.png",
     )
