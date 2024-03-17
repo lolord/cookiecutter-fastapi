@@ -1,5 +1,5 @@
 import os
-from typing import ClassVar, Optional
+from typing import ClassVar, List, Optional
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Statics Path
     BASE_DIR: ClassVar[str] = BASE_DIR
     STATICS_DIR: str = os.path.join(BASE_DIR, "statics")
+
+    # COS
+    ALLOW_ORIGINS: List[str] = ["*"]
 
     model_config = SettingsConfigDict(env_file=".env")
 
