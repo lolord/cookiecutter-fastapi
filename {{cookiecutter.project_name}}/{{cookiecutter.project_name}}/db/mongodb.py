@@ -2,6 +2,7 @@ import asyncio
 import re
 from typing import Dict, List, Optional, Type, TypeVar, Union
 
+from extends.logger import logger
 from motor.motor_asyncio import AsyncIOMotorClient
 from odmantic.bson import ObjectId
 from odmantic.engine import AIOEngine as ODMAIOEngine
@@ -34,15 +35,16 @@ async def get_query_expression(
     extra_query: Optional[Union[Dict, BaseModel]] = None,
 ):
     if isinstance(query, BaseModel):
-        query_dict = query.dict(
+        query_dict = query.model_dump(
             exclude_unset=True,
             exclude_none=True,
             exclude={"page", "page_size", "sort_by", "sort_order"},
         )
-    if isinstance(query, dict):
+    elif isinstance(query, dict):
         query_dict = query
     else:
         query_dict = {}
+
     if extra_query:
         if isinstance(extra_query, BaseModel):
             query_dict.update(extra_query.model_dump())
@@ -66,7 +68,7 @@ async def get_query_expression(
             else:
                 query_dict["$or"].append({f: q.strip()})
 
-    print("query_dict", query_dict)
+    logger.info(f"query_dict {query_dict}")
     return query_dict
 
 
@@ -181,4 +183,5 @@ client = AsyncIOMotorClient(settings.MONGO_URI)
 client.get_io_loop = asyncio.get_running_loop
 async_db = client[settings.MONGO_DB_NAME]
 engine = AIOEngine(client, database=settings.MONGO_DB_NAME)
+db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)
 db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)

@@ -63,7 +63,6 @@ def install_logger():
         ],
     }
     logger.configure(**loguru_config)  # type: ignore
-    print("install_logger end")
 
 
 install_logger()

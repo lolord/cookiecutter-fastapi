@@ -1,12 +1,13 @@
 import asyncio
 from typing import List, Optional, cast
 
+from api.user import SimpleUser, User
 from db import engine
+from extends.logger import logger
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute, APIRouter, Mount
-from api.user import SimpleUser, User
 from odmantic import ObjectId
 from odmantic.query import in_
 from pydantic import BaseModel
@@ -26,8 +27,8 @@ async def update_rbac_routes(app: FastAPI):
         if isinstance(route, Mount):
             continue
         route = cast(APIRoute, route)
-        print(route.path, getattr(route, "dependencies", None))
-
+        logger.info(route.path)
+        logger.info(getattr(route, "dependencies", None))
         # permissions = []
         # depends: ParamsDepends
         # for depends in getattr(route, "dependencies", []):
@@ -121,14 +122,11 @@ class RBACMiddleware(BaseHTTPMiddleware):
         )
         user = cast(Optional[User], request.scope["user"])
 
-        print("route", route)
-        print("user", user)
-
         if route and route.permissions:
             if user is None:
                 raise credentials_exception
 
-            user.permissions.append("login")
+            user.permissions.add("login")
             if not (set(route.permissions) & set(user.permissions)):
                 raise not_enough_permissions
 
