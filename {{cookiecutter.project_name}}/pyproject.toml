@@ -56,5 +56,5 @@ distribution = true
 
 
 [tool.codespell]
-skip = '**/swagger-ui-bundle.min.js,**/nginx_https.conf,**/nginx.conf'
+skip = '**/swagger-ui-bundle.js,**/nginx_https.conf,**/nginx.conf'
 ignore-words-list = 'statics'
