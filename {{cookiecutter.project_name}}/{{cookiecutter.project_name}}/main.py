@@ -1,8 +1,6 @@
 import os
 from contextlib import asynccontextmanager
 
-from api import admin, auth, dashboard, publics, user
-from extends.logger import logger
 from fastapi import Depends, FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import http_exception_handler
@@ -12,42 +10,51 @@ from fastapi.responses import ORJSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from odmantic.exceptions import DocumentParsingError
-from rbac.api import router as rbac_router
-from rbac.service import update_rbac_routes
-from schemas.errors import APIException
-from services.security import get_current_user, get_user_permissions, jwt_required
-from settings import settings
+from starlette import status
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    description=settings.DESCRIPTION,
-    debug=settings.DEBUG,
-    default_response_class=ORJSONResponse,
+from {{cookiecutter.project_name}}.api import admin, auth, dashboard, publics, user
+from {{cookiecutter.project_name}}.rbac.api import router as rbac_router
+from {{cookiecutter.project_name}}.rbac.middleware import RBACMiddleware
+from {{cookiecutter.project_name}}.schemas.errors import APIException
+from {{cookiecutter.project_name}}.services.security import (
+    get_current_user,
+    get_user_permissions,
+    jwt_required,
 )
-
-
-if not os.path.exists(settings.STATICS_DIR):
-    os.mkdir(settings.STATICS_DIR)
-
-app.mount("/statics", StaticFiles(directory="statics"), name="statics")
+from {{cookiecutter.project_name}}.settings import settings
+from {{cookiecutter.project_name}}.utils.logger import logger
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"startup: {settings.ENV_STATE}")
-    await update_rbac_routes(app)
+    await RBACMiddleware.update_rbac_routes(app)
     yield
+
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description=settings.DESCRIPTION,
+    lifespan=lifespan,
+    debug=settings.DEBUG,
+    default_response_class=ORJSONResponse,
+)
+
+if not os.path.exists(settings.STATICS_DIR):
+    os.mkdir(settings.STATICS_DIR)
+
+
+app.mount("/statics", StaticFiles(directory="statics"), name="statics")
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return ORJSONResponse(
-        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
     )
 
@@ -56,23 +63,37 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def handler_value_error(request: Request, error: ValueError):
     if isinstance(error, DocumentParsingError):
         return ORJSONResponse(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=jsonable_encoder(
                 {"detail": error.inner.errors(), "body": error.inner.title}
             ),
         )
     else:
-        return ORJSONResponse(jsonable_encoder({"error": str(error)}), status_code=500)
-
-
-@app.exception_handler(APIException)
-async def handler_timeout_error(request: Request, error: APIException):
-    return ORJSONResponse(jsonable_encoder(str(error)), status_code=500)
+        return ORJSONResponse(
+            jsonable_encoder({"error": str(error)}),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @app.exception_handler(HTTPException)
 async def http_error(request: Request, exc: HTTPException):
     return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(APIException)
+async def handler_api_error(request: Request, error: APIException):
+    return ORJSONResponse(
+        jsonable_encoder(str(error)),
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
+
+
+@app.exception_handler(Exception)
+async def handler_unknown_error(request: Request, error: Exception):
+    return ORJSONResponse(
+        jsonable_encoder(str(error)),
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
 
 
 app.add_middleware(
@@ -82,7 +103,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# app.add_middleware(RBACMiddleware)
+app.add_middleware(RBACMiddleware)
 
 
 app.include_router(auth.router, prefix=settings.API_VER, tags=["AUTH"])
@@ -113,8 +134,7 @@ async def set_user(request: Request, call_next):
 
     if user is not None:
         user.permissions = await get_user_permissions(user)
-
-    request.scope["user"] = user
+        setattr(request.state, "user", user)
 
     return await call_next(request)
 
