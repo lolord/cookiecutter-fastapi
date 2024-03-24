@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := all
 sources = {{cookiecutter.project_name}}
+tests = {{cookiecutter.project_name}}/tests
 
 .PHONY: .pdm  ## Check that PDM is installed
 .pdm:
@@ -43,8 +44,7 @@ typecheck: .pre-commit .pdm
 
 .PHONY: test  ## Run all tests, skipping the type-checker integration tests
 test: .pdm
-	cd {{cookiecutter.project_name}}
-	pdm run coverage run -m pytest --durations=10
+	pdm run coverage run -m pytest -vs $(tests)  --durations=10
 
 .PHONY: testcov  ## Run tests and generate a coverage report, skipping the type-checker integration tests
 testcov: test
