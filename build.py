@@ -43,6 +43,7 @@ def copy_dir(input="cookiecutter_fastapi", output=COOKIECUTTER):
             "pdm.lock",
             ".pdm-python",
             ".coverage",
+            "htmlcov",
         ]:
             continue
         input_file = os.path.join(input, file)
