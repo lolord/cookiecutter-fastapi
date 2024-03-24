@@ -13,3 +13,4 @@ pdm.lock
 .ruff_cache
 .venv
 .pdm-python
+coverage.lcov
