@@ -1,12 +1,18 @@
 import os
+from enum import Enum
 from typing import ClassVar, List, Optional
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class EnvState(str, Enum):
+    DEV = "dev"
+    PROD = "prod"
+
+
 class EnvSettings(BaseSettings):
-    ENV_STATE: Optional[str] = "dev"
+    ENV_STATE: Optional[EnvState] = EnvState.DEV
 
 
 BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,7 +26,6 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "FastAPI"
     VERSION: str = "{{cookiecutter.version}}"
     DESCRIPTION: str = ""
-    DEBUG: bool = True
 
     ENV_STATE: Optional[str] = "dev"
 
@@ -50,6 +55,7 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:6379/7"
 
     PASSWORD_REGEX: str = r"[a-zA-Z0-9~!@#$%^&*()_\-+=<>?:\"\{\}\|,.\/;'\\\[\]]{6,24}$"
+    USERNAME_REGEX: str = r"[\u4e00-\u9fa5a-zA-Z0-9-_]{2,30}$"
 
     # JWT
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 14
@@ -63,6 +69,10 @@ class Settings(BaseSettings):
     # COS
     ALLOW_ORIGINS: List[str] = ["*"]
 
+    @property
+    def DEBUG(self) -> bool:
+        return self.ENV_STATE == EnvState.PROD
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
@@ -74,4 +84,5 @@ elif env_state == "test":
 elif env_state == "prod":
     settings = Settings(_env_file=".prod.env")  # type: ignore
 else:
+    raise ValueError("unknown ENV_STATE: {}, must be dev or prod".format(env_state))
     raise ValueError("unknown ENV_STATE: {}, must be dev or prod".format(env_state))

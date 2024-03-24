@@ -4,7 +4,9 @@ from typing import List, Optional, TypeAlias
 from odmantic import Field, Index, Model, ObjectId
 from odmantic.query import asc
 from pydantic import EmailStr
-from rbac.model import PermissionNames, RoleName
+
+
+from {{cookiecutter.project_name}}.rbac.model import PermissionNames, RoleName
 
 UserID: TypeAlias = ObjectId
 
@@ -41,7 +43,7 @@ class SimpleUser(Model):
     enabled: bool = True
     roles: List[RoleName] = []
 
-    model_config = {"collection": "user"}
+    model_config = {"collection": +User}
 
 
 # engine = AIOEngine()

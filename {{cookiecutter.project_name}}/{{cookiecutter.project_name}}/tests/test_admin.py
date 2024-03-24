@@ -1,9 +1,11 @@
 from datetime import datetime
+from typing import cast
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from {{cookiecutter.project_name}}.models.user import User
+from {{cookiecutter.project_name}}.schemas import Resp
 
 
 def test_manage_user(app: FastAPI, client: TestClient, admin_token: str, admin: User):
@@ -11,7 +13,7 @@ def test_manage_user(app: FastAPI, client: TestClient, admin_token: str, admin: 
 
     name = datetime.now().strftime("create%Y%m%d%H%M%S")
     data = {
-        "email": f"{name}@gmail.com",
+        "email": f"{name}@email.com",
         "nickname": "create",
     }
 
@@ -19,20 +21,26 @@ def test_manage_user(app: FastAPI, client: TestClient, admin_token: str, admin: 
 
     assert response.status_code == 200
 
-    user = response.json()["data"]
-    assert user["email"] == data["email"]
-    assert user["nickname"] == data["nickname"]
+    resp = Resp[User].model_validate(response.json())
+    assert resp.data is not None
+    user = cast(User, resp.data)
+    assert user.email == data["email"]
+    assert user.nickname == data["nickname"]
 
-    id = user["id"]
+    id = user.id
     response = client.put(
         f"{url}/{id}",
         headers={"Access-Token": admin_token},
         json={"nickname": "updated"},
     )
     assert response.status_code == 200
-    user = response.json()["data"]
-    assert user["email"] == data["email"]
-    assert user["nickname"] == "updated"
+
+    resp = Resp[User].model_validate(response.json())
+    assert resp.data is not None
+    user = cast(User, resp.data)
+
+    assert user.email == data["email"]
+    assert user.nickname == "updated"
 
     url = app.url_path_for("admin:reset-password", id=id)
     response = client.post(

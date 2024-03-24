@@ -9,7 +9,7 @@ from {{cookiecutter.project_name}}.models.user import User
 def test_register_Illegal_password(app: FastAPI, client: TestClient):
     url = app.url_path_for("auth:register")
     data = {
-        "email": "email@gmail.com",
+        "email": "{{cookiecutter.email}}",
         "nickname": "test",
         "password": "12345",
     }
@@ -20,7 +20,7 @@ def test_register_Illegal_password(app: FastAPI, client: TestClient):
 def test_register_Illegal_name(app: FastAPI, client: TestClient):
     url = app.url_path_for("auth:register")
     data = {
-        "email": "email@gmail.com",
+        "email": "{{cookiecutter.email}}",
         "nickname": "test1234567890",
         "password": "123456",
     }

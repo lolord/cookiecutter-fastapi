@@ -5,10 +5,11 @@ import platform
 from typing import Any, Dict, List
 
 import psutil
-from db.backend import redis_db
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
-from schemas import Pagination, PaginationQuery, PaginationResp
+
+from {{cookiecutter.project_name}}.db.backend import redis_db
+from {{cookiecutter.project_name}}.schemas import Pagination, PaginationQuery, PaginationResp
 
 router = APIRouter(prefix="/server-stat", tags=["SERVER STAT"])
 

@@ -4,6 +4,11 @@
         "njpwerner.autodocstring",
         "chouzz.vscode-better-align",
         "hediet.vscode-drawio",
-        "shd101wyy.markdown-preview-enhanced"
+        "shd101wyy.markdown-preview-enhanced",
+        "tamasfe.even-better-toml",
+        "ms-vscode.makefile-tools",
+        "gabdug.pdm",
+        "charliermarsh.ruff",
+        "Gruntfuggly.todo-tree"
     ]
 }

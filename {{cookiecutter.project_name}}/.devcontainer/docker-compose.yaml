@@ -1,6 +1,7 @@
 version: '3'
 services:
   api:
+    container_name: app
     build:
       context: .
       dockerfile: $PWD/app/Dockerfile
@@ -11,7 +12,9 @@ services:
       - $PWD/log/supervisor:/var/log/supervisor
     depends_on:
       - mongo
-  ui:
+      - redis
+  nginx:
+    container_name: nginx
     image: nginx:stable-alpine
     ports:
       - '8080:443'
@@ -22,6 +25,7 @@ services:
       - $PWD/log/nginx:/var/log/nginx
 
   redis:
+    container_name: redis
     image: redis:latest
     restart: always
     ports:

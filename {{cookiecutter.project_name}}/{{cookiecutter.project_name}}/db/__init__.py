@@ -2,7 +2,9 @@ import asyncio
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
-from settings import settings
+
+
+from {{cookiecutter.project_name}}.settings import settings
 
 from .mongodb import (
     AIOEngine,

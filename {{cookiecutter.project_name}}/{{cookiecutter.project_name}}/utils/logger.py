@@ -5,7 +5,7 @@ from types import FrameType
 from typing import cast
 
 from loguru import logger
-from settings import settings
+from {{cookiecutter.project_name}}.settings import settings
 
 
 class InterceptHandler(logging.Handler):

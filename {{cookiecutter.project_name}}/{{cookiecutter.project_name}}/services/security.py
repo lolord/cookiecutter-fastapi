@@ -1,17 +1,18 @@
 from datetime import datetime, timedelta
 from typing import Optional, cast
 
-from db import engine
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 from jose import JWTError, jwt
-from models.user import User
 from odmantic.query import in_
 from passlib.context import CryptContext
 from pydantic import EmailStr
-from rbac.model import PermissionNames, RBACRoute, Role
-from schemas import PermissionDeniedError, RBACRouteNotFindError
-from settings import settings
+
+from {{cookiecutter.project_name}}.db import engine
+from {{cookiecutter.project_name}}.models.user import User
+from {{cookiecutter.project_name}}.rbac.model import PermissionNames, RBACRoute, Role
+from {{cookiecutter.project_name}}.schemas import PermissionDeniedError, RBACRouteNotFindError
+from {{cookiecutter.project_name}}.settings import settings
 
 SECRET_KEY = settings.SECRET_KEY.get_secret_value()
 ALGORITHM = "HS256"
@@ -169,7 +170,7 @@ async def auth_current_user(user: Optional[User] = Depends(get_current_user)) ->
 
     if user.enabled is False:
         raise credentials_exception
-    # TODO
+
     # user.__dict__["permissions"] = await auth_api_permission(user)
 
     return user
