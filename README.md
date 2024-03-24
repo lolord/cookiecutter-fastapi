@@ -109,12 +109,7 @@ new_project
     │      security.py
     │      __init__.py
     ├─statics
-    │  └─api-docs
-    │      │  favicon.png
-    │      │
-    │      └─swagger
-    │              swagger-ui-bundle.js
-    │              swagger-ui.css
+    │      avicon.png
     ├─supervisord
     │      app.ini
     ├─tests

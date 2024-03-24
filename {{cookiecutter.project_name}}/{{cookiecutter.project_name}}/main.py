@@ -147,12 +147,9 @@ async def custom_swagger_ui_html():
         title=app.title + " - Swagger UI",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
         # from cdn
-        # swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui-bundle.js",
-        # swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui.css",
-        # from local
-        swagger_js_url="/statics/api-docs/swagger/swagger-ui-bundle.js",
-        swagger_css_url="/statics/api-docs/swagger/swagger-ui.css",
-        swagger_favicon_url="/statics/api-docs/favicon.png",
+        swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui.css",
+        swagger_favicon_url="/statics/favicon.png",
     )
 
 
