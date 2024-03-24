@@ -113,7 +113,7 @@ new_project
     │      │  favicon.png
     │      │
     │      └─swagger
-    │              swagger-ui-bundle.min.js
+    │              swagger-ui-bundle.js
     │              swagger-ui.css
     ├─supervisord
     │      app.ini
@@ -155,6 +155,7 @@ INFO:     Application startup complete.
 
 ### supervisor
 
+```ini
 [program:project_name]
 directory=/app
 command=uvicorn main:app --host 0.0.0.0 --port 5000
@@ -164,6 +165,34 @@ stopasgroup=true
 killasgroup=true
 stderr_logfile=/var/log/supervisor/%(program_name)s.err.log
 stdout_logfile=/var/log/supervisor/%(program_name)s.out.log
+```
+
+### celery
+
+```ini
+
+[program:celery_worker]
+directory=/app
+command=celery -A worker.app worker  -l info -c 2 --loglevel=info
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stderr_logfile=/var/log/supervisor/%(program_name)s.err.log
+stdout_logfile=/var/log/supervisor/%(program_name)s.out.log
+
+
+[program:celery_beat]
+directory=/app
+command=celery -A worker.app beat -l INFO
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stderr_logfile=/var/log/supervisor/%(program_name)s.err.log
+stdout_logfile=/var/log/supervisor/%(program_name)s.out.log
+
+```
 
 ### Makefile
 
@@ -191,7 +220,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## FAQ
 
-#### 请使用`anyio`
+#### Priority Use `anyio`
 
 `Starlette`是依赖`anyio`的，`FastAPI`是基于`Starlette`的, 所以请使用`anyio`
 `anyio`兼容`asyncio`和`trio`
@@ -203,7 +232,9 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 使用时指明route的`response_model`可以生成更友好的API文档
 
 ``` python
-@router.get(response_model=Resp[bool])
+@router.get("/me")
+async def me(user: User = Depends(auth_current_user)) -> Resp[User]:
+    return Resp(data=user)
 ```
 
 #### middleware的request参数不是FastAPI的request
