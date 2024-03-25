@@ -1,7 +1,7 @@
 # FROM tiangolo/uvicorn-gunicorn-fastapi:python3.8-slim
 FROM tiangolo/uvicorn-gunicorn-fastapi:python3.9
 
-ARG SERVICE_NAME='aioflow_api'
+ARG SERVICE_NAME='{{cookiecutter.project_name}}'
 
 WORKDIR /app
 

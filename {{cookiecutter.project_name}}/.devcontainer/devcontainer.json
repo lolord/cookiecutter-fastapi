@@ -1,0 +1,7 @@
+{
+  "name": "{{cookiecutter.project_name}}",
+  "dockerComposeFile": "dev-docker-compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/app",
+  "shutdownAction": "stopCompose"
+}
