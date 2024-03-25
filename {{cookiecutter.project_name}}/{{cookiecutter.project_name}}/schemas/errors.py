@@ -16,7 +16,7 @@ class DBTimeoutError(APIException):
     def dict(self):
         return {
             "msg": f"TimeoutError:{self.timeout}s",
-            "model": +type(self.model),
+            "model": self.model.__collection__,
             "query": self.query,
         }
 

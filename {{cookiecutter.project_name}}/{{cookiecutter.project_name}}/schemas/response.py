@@ -22,6 +22,18 @@ class APIState(Enum):
 APIState.__doc__ = "<br/>".join(f"{i.value}:{i.name}" for i in APIState)
 
 
+T = TypeVar("T")
+
+
+class Resp(BaseModel, Generic[T]):
+    code: Annotated[APIState, Field(description="业务状态码")] = APIState.OK
+    msg: Optional[Annotated[str, Field(description="错误信息")]] = None
+    data: Optional[T] = None
+
+    class Config:
+        json_encoders = BSON_TYPES_ENCODERS
+
+
 class Pagination(BaseModel):
     total: Annotated[int, Field(description="允许查询最大结果数量")] = 0
     pages: Annotated[int, Field(description="总分数")] = 1
@@ -48,18 +60,6 @@ class Pagination(BaseModel):
         values["pages"] = pages
 
         return values
-
-
-T = TypeVar("T")
-
-
-class Resp(BaseModel, Generic[T]):
-    code: Annotated[APIState, Field(description="业务状态码")] = APIState.OK
-    msg: Optional[Annotated[str, Field(description="错误信息")]] = None
-    data: Optional[T] = None
-
-    class Config:
-        json_encoders = BSON_TYPES_ENCODERS
 
 
 class PaginationResp(Resp[List[T]], Generic[T]):

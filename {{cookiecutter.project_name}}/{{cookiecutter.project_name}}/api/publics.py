@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from {{cookiecutter.project_name}}.settings import settings
 
 router = APIRouter(prefix="/publics")
@@ -9,7 +10,7 @@ async def hello():
     return "hello"
 
 
-@router.get("/app", summary="App information")
+@router.get("/app", summary="App description")
 async def get_app():
     return {
         "name": settings.PROJECT_NAME,

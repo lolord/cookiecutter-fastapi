@@ -14,7 +14,7 @@ def hints_date_range(field: Union[str, FieldProxy], at: Optional[Tuple[date, dat
                 year=at[1].year, month=at[1].month, day=at[1].day
             ) + timedelta(days=1)
 
-    if not result:
+    if result:
         if isinstance(field, FieldProxy):
             return {+field: result}
         return {field: result}

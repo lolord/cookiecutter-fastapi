@@ -13,8 +13,6 @@ from {{cookiecutter.project_name}}.schemas import Pagination, PaginationQuery, P
 
 router = APIRouter(prefix="/server-stat", tags=["SERVER STAT"])
 
-# https://www.liaoxuefeng.com/wiki/1016959663602400/1017805733037760
-
 
 class CPU(BaseModel):
     cpu: float

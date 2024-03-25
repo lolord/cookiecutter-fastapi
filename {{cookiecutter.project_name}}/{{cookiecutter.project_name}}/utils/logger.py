@@ -5,6 +5,8 @@ from types import FrameType
 from typing import cast
 
 from loguru import logger
+
+
 from {{cookiecutter.project_name}}.settings import settings
 
 

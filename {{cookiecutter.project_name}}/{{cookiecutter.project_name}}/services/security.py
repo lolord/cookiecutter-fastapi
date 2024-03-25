@@ -19,7 +19,6 @@ ALGORITHM = "HS256"
 
 oauth2_scheme = APIKeyHeader(name="Access-Token")
 
-# password
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 credentials_exception = HTTPException(
