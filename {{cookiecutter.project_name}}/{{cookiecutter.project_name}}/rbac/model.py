@@ -28,6 +28,12 @@ PermissionNames: TypeAlias = Annotated[
     PlainSerializer(frozenset_serializer, return_type=List[str]),
 ]
 
+RoleNames: TypeAlias = Annotated[
+    Set[RoleName],
+    WithBsonSerializer(frozenset_serializer),
+    PlainSerializer(frozenset_serializer, return_type=List[str]),
+]
+
 
 class SYSTEAM_ROLES:
     ANONYMOUS = "anonymous"
@@ -57,7 +63,7 @@ class RBACRoute(Model):
     path: str
     name: str
     method: str = Field(..., min_length=1, max_length=100)
-    endpoint: str = "endpoint function name"
+    endpoint: str = Field(..., description="endpoint function name")
     tags: List[str] = []
     description: str = ""
     deprecated: bool = False

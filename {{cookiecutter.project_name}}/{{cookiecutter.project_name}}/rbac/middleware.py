@@ -99,7 +99,12 @@ class RBACMiddleware(BaseHTTPMiddleware):
                     await engine.database[+RBACRoute].update_one(
                         {"method": method, "path": route.path},
                         {
-                            "$set": {"deprecated": False, "tags": tags, "name": name},
+                            "$set": {
+                                "deprecated": False,
+                                "tags": tags,
+                                "name": name,
+                                "endpoint": route.endpoint.__name__,
+                            },
                             # "$addToSet": {"permissions": {"$each": permissions}},
                         },
                         upsert=True,

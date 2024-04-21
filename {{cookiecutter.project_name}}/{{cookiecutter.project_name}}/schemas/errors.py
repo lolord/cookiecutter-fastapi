@@ -1,43 +1,30 @@
-from typing import Dict, Set, Type
+from typing import Set
 
-from odmantic import Model
+from {{cookiecutter.project_name}}.schemas.response import APIState
 
 
 class APIException(Exception):
-    ...
+    def __init__(self, code: APIState, msg: str) -> None:
+        super().__init__(code, msg)
+
+    def dict(self):
+        return {"code": self.args[0], "msg": self.args[1]}
 
 
 class DBTimeoutError(APIException):
-    def __init__(self, model: Type[Model], query: Dict, timeout: float) -> None:
-        self.model = model
-        self.query = query
-        self.timeout = timeout
-
-    def dict(self):
-        return {
-            "msg": f"TimeoutError:{self.timeout}s",
-            "model": self.model.__collection__,
-            "query": self.query,
-        }
+    def __init__(self, msg: str) -> None:
+        super().__init__(APIState.DB_TIMEOUT, msg)
 
 
 class RBACRouteNotFindError(APIException):
     def __init__(self, method: str, path: str) -> None:
-        self.method = method
-        self.path = path
-
-    def dict(self):
-        return {
-            "msg": f"RBACRouteNotFind:{self.path}.{self.method}",
-        }
+        super().__init__(
+            APIState.PERMISSION_DENIED, f"RBACRouteNotFind:{path}.{method}"
+        )
 
 
 class PermissionDeniedError(APIException):
     def __init__(self, permissions: Set[str]) -> None:
-        self.permissions = list(permissions)
-
-    def dict(self):
-        return {
-            "msg": "Permission denied",
-            "permissions": self.permissions,
-        }
+        super().__init__(
+            APIState.PERMISSION_DENIED, f"Permission denied: {list(permissions)}"
+        )

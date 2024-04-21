@@ -10,7 +10,7 @@ from odmantic.query import QueryExpression, SortExpression, asc, desc
 from pydantic import BaseModel
 from pymongo import MongoClient
 
-from {{cookiecutter.project_name}}.schemas import DBTimeoutError, Pagination, PaginationResp
+from {{cookiecutter.project_name}}.schemas import DBTimeoutError, PageResp, Pagination
 from {{cookiecutter.project_name}}.settings import settings
 from {{cookiecutter.project_name}}.utils.logger import logger
 
@@ -93,7 +93,7 @@ async def get_pagination(
     try:
         total_count = await asyncio.wait_for(coro, timeout=settings.MONGO_TIMROUT)
     except asyncio.TimeoutError:
-        raise DBTimeoutError(model, query_dict, timeout=settings.MONGO_TIMROUT)
+        raise DBTimeoutError(f"DBTimeoutError: {model} {query_dict}")
 
     return Pagination(
         page=page,
@@ -132,13 +132,13 @@ async def find_pagination(
         skip=(pagination.page - 1) * pagination.page_size,
         limit=pagination.page_size,
     )
-    res = PaginationResp(data=data, pagination=pagination)
+    res = PageResp(data=data, pagination=pagination)
     return res
 
 
 async def paginate_aggregate(
     engine: "AIOEngine", model: Type[ModelType], query, extra_query
-) -> PaginationResp[ModelType]:
+) -> PageResp[ModelType]:
     aggregate_pipeline = []
     query_dict = await get_query_expression(query, extra_query)
 
@@ -179,13 +179,13 @@ async def paginate_aggregate(
         total_count=total,
     )
 
-    return PaginationResp(data=data, pagination=pagination)
+    return PageResp(data=data, pagination=pagination)
 
 
 class AIOEngine(ODMAIOEngine):
     async def find_pagination(
         self, model: Type[ModelType], query, extra_query=None
-    ) -> PaginationResp[ModelType]:
+    ) -> PageResp[ModelType]:
         return await find_pagination(self, model, query, extra_query)
 
     async def exists(self, model: Type[ModelType], *queries) -> bool:
@@ -208,6 +208,4 @@ client = AsyncIOMotorClient(settings.MONGO_URI)
 client.get_io_loop = asyncio.get_running_loop
 async_db = client[settings.MONGO_DB_NAME]
 engine = AIOEngine(client, database=settings.MONGO_DB_NAME)
-db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)
-db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)
 db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)

@@ -82,8 +82,9 @@ async def http_error(request: Request, exc: HTTPException):
 
 @app.exception_handler(APIException)
 async def handler_api_error(request: Request, error: APIException):
+    logger.error(f"APIException: {repr(error)}")
     return ORJSONResponse(
-        jsonable_encoder(str(error)),
+        jsonable_encoder(error.dict()),
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
@@ -146,10 +147,9 @@ async def custom_swagger_ui_html():
         openapi_url=app.openapi_url,
         title=app.title + " - Swagger UI",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
-        # from cdn
         swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui-bundle.js",
         swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui.css",
-        swagger_favicon_url="/statics/favicon.png",
+        swagger_favicon_url="/statics/api-docs/favicon.png",
     )
 
 

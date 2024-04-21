@@ -6,7 +6,7 @@ from .errors import (
     RBACRouteNotFindError,
 )
 from .request import PaginationQuery
-from .response import APIState, Pagination, PaginationResp, Resp
+from .response import APIState, PageResp, Pagination, Resp
 
 __all__ = (
     "Token",
@@ -17,7 +17,7 @@ __all__ = (
     "RBACRouteNotFindError",
     "PaginationQuery",
     "Pagination",
-    "PaginationResp",
+    "PageResp",
     "Resp",
     "APIState",
 )

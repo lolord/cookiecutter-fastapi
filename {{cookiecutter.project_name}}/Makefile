@@ -1,6 +1,5 @@
 .DEFAULT_GOAL := all
-sources = {{cookiecutter.project_name}}
-tests = {{cookiecutter.project_name}}/tests
+source = {{cookiecutter.project_name}}
 
 .PHONY: .pdm  ## Check that PDM is installed
 .pdm:
@@ -26,13 +25,13 @@ rebuild-lockfiles: .pdm
 
 .PHONY: format  ## Auto-format python source files
 format: .pdm
-	pdm run ruff --fix $(sources)
-	pdm run ruff format $(sources)
+	pdm run ruff --fix $(source)
+	pdm run ruff format $(source)
 
 .PHONY: lint  ## Lint python source files
 lint: .pdm
-	pdm run ruff $(sources)
-	pdm run ruff format --check $(sources)
+	pdm run ruff $(source)
+	pdm run ruff format --check $(source)
 
 .PHONY: codespell  ## Use Codespell to do spellchecking
 codespell: .pre-commit
@@ -44,14 +43,14 @@ typecheck: .pre-commit .pdm
 
 .PHONY: test  ## Run all tests, skipping the type-checker integration tests
 test: .pdm
-	pdm run coverage run -m pytest -vs $(tests)  --durations=10
+	cd $(source);pdm run coverage run -m pytest -vs $(tests)  --durations=10
 
 .PHONY: testcov  ## Run tests and generate a coverage report, skipping the type-checker integration tests
 testcov: test
 	@echo "building coverage html"
-	@pdm run coverage html
+	cd $(source);pdm run coverage html
 	@echo "building coverage lcov"
-	@pdm run coverage lcov
+	cd $(source);pdm run coverage lcov
 
 
 .PHONY: all  ## Run the standard set of checks performed in CI

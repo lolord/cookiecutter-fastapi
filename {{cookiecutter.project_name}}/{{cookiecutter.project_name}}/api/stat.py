@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
 
 from {{cookiecutter.project_name}}.db.backend import redis_db
-from {{cookiecutter.project_name}}.schemas import Pagination, PaginationQuery, PaginationResp
+from {{cookiecutter.project_name}}.schemas import PageResp, Pagination, PaginationQuery
 
 router = APIRouter(prefix="/server-stat", tags=["SERVER STAT"])
 
@@ -47,7 +47,6 @@ def system_parameter():
     cpu_thread = psutil.cpu_count()  # CPU逻辑数量
     cpu_core = psutil.cpu_count(logical=False)  # CPU物理核心
     host_name = platform.node()  # 电脑名称
-    psutil.process_iter()
     sysname, nodename, release, version, machine = os.uname()  # type: ignore
     return {
         "cpu_type": get_cpu_type(),
@@ -134,7 +133,7 @@ class Process(BaseModel):
     terminal: str = Field(None, description="进程终端")
 
 
-@router.get("/process", summary="进程列表", response_model=PaginationResp[Process])
+@router.get("/process", summary="进程列表", response_model=PageResp[Process])
 async def get_process(query: PaginationQuery = Depends()):
     start = (query.page - 1) * query.page_size
     end = start + query.page_size
@@ -160,7 +159,7 @@ async def get_process(query: PaginationQuery = Depends()):
     pagination = Pagination(
         total=total, page=query.page, page_size=query.page_size, total_count=total
     )
-    return PaginationResp(data=data, pagination=pagination)
+    return PageResp(data=data, pagination=pagination)
 
 
 @router.get("/process/{pid}", summary="进程详情", response_model=Dict[str, Any])

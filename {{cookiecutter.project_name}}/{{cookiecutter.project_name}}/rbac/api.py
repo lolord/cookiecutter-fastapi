@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, constr
 
 from {{cookiecutter.project_name}}.api.user import User
 from {{cookiecutter.project_name}}.db import engine
-from {{cookiecutter.project_name}}.schemas import APIState, PaginationQuery, PaginationResp, Resp
+from {{cookiecutter.project_name}}.schemas import APIState, PageResp, PaginationQuery, Resp
 
 from .model import (
     Menu,
@@ -40,7 +40,7 @@ class RoleQuery(PaginationQuery):
 )
 async def get_roles(
     query: RoleQuery = Depends(),
-) -> PaginationResp[Role]:
+) -> PageResp[Role]:
     return await engine.find_pagination(Role, query)
 
 
@@ -98,7 +98,7 @@ async def delete_roles(
     "/routes",
     summary="路由列表",
 )
-async def get_routes(query: PaginationQuery = Depends()) -> PaginationResp[RBACRoute]:
+async def get_routes(query: PaginationQuery = Depends()) -> PageResp[RBACRoute]:
     if not query.sort_by:
         query.sort_by = +cast(FieldProxy, RBACRoute.tags)
     return await engine.find_pagination(
@@ -155,7 +155,7 @@ async def delete_route_permission(
 
 
 @router.get("/menus", summary="菜单列表")
-async def get_menu(query: PaginationQuery = Depends()) -> PaginationResp[Menu]:
+async def get_menu(query: PaginationQuery = Depends()) -> PageResp[Menu]:
     if not query.sort_by:
         query.sort_by = str(Menu.path)
     return await engine.find_pagination(Menu, query)

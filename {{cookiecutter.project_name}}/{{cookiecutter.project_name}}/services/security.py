@@ -49,11 +49,6 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-async def get_user_by_nickname(nickname: EmailStr) -> Optional[User]:
-    user = await engine.find_one(User, User.nickname == nickname)
-    return user
-
-
 async def jwt_required(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -68,9 +63,9 @@ async def jwt_required(token: str = Depends(oauth2_scheme)):
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -157,20 +152,24 @@ async def auth_api_permission(
     user_permissions: PermissionNames = Depends(get_user_permissions),
     api_permissions: PermissionNames = Depends(get_api_permissions),
 ) -> PermissionNames:
+    print("xxx", user_permissions, api_permissions)
     permissions = user_permissions & api_permissions
-    if not permissions:
+    if api_permissions and not permissions:
         raise PermissionDeniedError(api_permissions)
     return permissions
 
 
-async def auth_current_user(user: Optional[User] = Depends(get_current_user)) -> User:
+async def auth_current_user(
+    user: Optional[User] = Depends(get_current_user),
+    permissions: PermissionNames = Depends(auth_api_permission),
+) -> User:
     if user is None:
         raise credentials_exception
 
     if user.enabled is False:
         raise credentials_exception
 
-    # user.__dict__["permissions"] = await auth_api_permission(user)
+    user.__dict__["permissions"] = permissions
 
     return user
 

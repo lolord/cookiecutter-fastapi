@@ -14,7 +14,7 @@ dependencies = [
     "loguru>=0.6.0",
     "python-dotenv>=1.0.0",
     "jose==1.0.0",
-    "typing-extensions>=4.2.0",
+    "typing-extensions>=4.11.0",
     "email-validator>=1.0.3",
     "dnspython>=2.0.0",
     "idna>=2.0.0",
@@ -55,6 +55,8 @@ distribution = true
 # pdm config pypi.url "https://pypi.tuna.tsinghua.edu.cn/simple/"
 
 
+[tool.pdm.dev-dependencies]
+pytest-ordering = []
 [tool.codespell]
 skip = '**/swagger-ui-bundle.js,**/nginx_https.conf,**/nginx.conf'
 ignore-words-list = 'statics'

@@ -17,6 +17,11 @@ class APIState(Enum):
     OPERATE_INVALID = 4000  # 无效操作
     PERMISSION_DENIED = 5000  # 权限不足
 
+    API_TIMEOUT = 6000
+    DB_TIMEOUT = 6001
+
+    OTHER = 10000
+
 
 # openapi doc
 APIState.__doc__ = "<br/>".join(f"{i.value}:{i.name}" for i in APIState)
@@ -25,13 +30,19 @@ APIState.__doc__ = "<br/>".join(f"{i.value}:{i.name}" for i in APIState)
 T = TypeVar("T")
 
 
-class Resp(BaseModel, Generic[T]):
+class BaseResp(BaseModel):
+    code: Annotated[APIState, Field(description="业务状态码")] = APIState.OK
+    msg: Optional[Annotated[str, Field(description="错误信息")]] = None
+
+    model_config = {"json_encoders": BSON_TYPES_ENCODERS}
+
+
+class Resp(BaseResp, Generic[T]):
     code: Annotated[APIState, Field(description="业务状态码")] = APIState.OK
     msg: Optional[Annotated[str, Field(description="错误信息")]] = None
     data: Optional[T] = None
 
-    class Config:
-        json_encoders = BSON_TYPES_ENCODERS
+    model_config = {"json_encoders": BSON_TYPES_ENCODERS}
 
 
 class Pagination(BaseModel):
@@ -43,8 +54,8 @@ class Pagination(BaseModel):
 
     @model_validator(mode="before")
     def check(cls, values):
-        if isinstance(values, BaseModel):
-            values = values.model_dump()
+        # if isinstance(values, BaseModel):
+        #     values = values.model_dump()
 
         total_count = values.get("total_count", 0)
         page_size = values.get("page_size", 10)
@@ -62,5 +73,6 @@ class Pagination(BaseModel):
         return values
 
 
-class PaginationResp(Resp[List[T]], Generic[T]):
+class PageResp(BaseResp, Generic[T]):
+    data: Annotated[List[T], Field(description="数据集")] = []
     pagination: Annotated[Pagination, Field(description="分页")]

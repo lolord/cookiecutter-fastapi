@@ -1,12 +1,11 @@
 from datetime import datetime
-from typing import List, Optional, TypeAlias
+from typing import Optional, TypeAlias
 
 from odmantic import Field, Index, Model, ObjectId
 from odmantic.query import asc
 from pydantic import EmailStr
 
-
-from {{cookiecutter.project_name}}.rbac.model import PermissionNames, RoleName
+from {{cookiecutter.project_name}}.rbac.model import PermissionNames, RoleNames
 
 UserID: TypeAlias = ObjectId
 
@@ -17,7 +16,7 @@ class User(Model):
     hashed_password: str = Field("", max_length=128)
     enabled: bool = True
     deleted: int = 0
-    roles: List[RoleName] = []
+    roles: RoleNames = Field([])
     permissions: PermissionNames = Field([])
 
     u_at: datetime = Field(description="修改时间", default_factory=datetime.now)
@@ -41,7 +40,7 @@ class SimpleUser(Model):
     email: EmailStr = Field(...)
     nickname: str = Field(..., min_length=3, max_length=14)
     enabled: bool = True
-    roles: List[RoleName] = []
+    roles: RoleNames = Field([])
 
     model_config = {"collection": +User}
 
