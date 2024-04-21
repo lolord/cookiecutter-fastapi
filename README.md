@@ -11,7 +11,6 @@
 - Use Codespell to do spellchecking
 - Type-checking
 - Automated testing and coverage report
-- Devcontainer
 
 ## Prerequisites
 
@@ -43,89 +42,6 @@ Creating a pyproject.toml for PDM...
   [4/5] author (author):
   [5/5] email (author@email.com):
 Project is initialized successfully
-> tree
-new_project
-│  .gitignore
-│  .pre-commit-config.yaml
-│  Makefile
-│  pyproject.toml
-├─.devcontainer
-│  │  docker-compose.yaml
-│  ├─app
-│  │      Dockerfile
-│  ├─mongo
-│  │  │  Dockerfile
-│  │  ├─conf
-│  │  │      mongod.conf
-│  │  └─init
-│  │          01-init.js
-│  └─nginx
-│      │  nginx.conf
-│      │  nginx_http.conf
-│      │  nginx_https.conf
-│      └─conf
-│              .htpasswd
-│              openssl.sh
-├─.vscode
-│      extensions.json
-│      keybindings.json
-│      settings.json
-└─new_project
-    │  .env
-    │  main.py
-    │  settings.py
-    │  __init__.py
-    ├─api
-    │      admin.py
-    │      auth.py
-    │      dashboard.py
-    │      public.py
-    │      stat.py
-    │      user.py
-    │      __init__.py
-    ├─db
-    │      backend.py
-    │      mongodb.py
-    │      __init__.py
-    ├─extends
-    │      crud_router.py
-    │      logger.py
-    │      __init__.py
-    ├─models
-    │      user.py
-    ├─rbac
-    │      api.py
-    │      model.py
-    │      service.py
-    ├─schemas
-    │      auth.py
-    │      errors.py
-    │      request.py
-    │      response.py
-    │      __init__.py
-    ├─scripts
-    │      init_db.py
-    ├─services
-    │      security.py
-    │      __init__.py
-    ├─statics
-    │      avicon.png
-    ├─supervisord
-    │      app.ini
-    ├─tests
-    │      conftest.py
-    │      test_admin.py
-    │      test_auth.py
-    │      __init__.py
-    ├─utils
-    │      date_range.py
-    │      hash.py
-    │      __init__.py
-    └─worker
-            app.py
-            celery_worker.py
-            tasks.py
-
 ```
 
 ### Configure environmental parameters
