@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PaginationQuery(BaseModel):
@@ -9,3 +9,6 @@ class PaginationQuery(BaseModel):
 
     sort_by: Optional[str] = None
     sort_order: str = "ascend"
+
+    q: Optional[str] = Field(None, description="查询对象")
+    keys: List[str] = Field([], description="查询字段")

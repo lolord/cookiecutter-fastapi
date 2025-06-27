@@ -1,9 +1,7 @@
 from .auth import Token, UserID
 from .errors import (
-    APIException,
-    DBTimeoutError,
-    PermissionDeniedError,
-    RBACRouteNotFindError,
+    APIError,
+    QueryTimeoutError,
 )
 from .request import PaginationQuery
 from .response import APIState, PageResp, Pagination, Resp
@@ -11,10 +9,8 @@ from .response import APIState, PageResp, Pagination, Resp
 __all__ = (
     "Token",
     "UserID",
-    "APIException",
-    "DBTimeoutError",
-    "PermissionDeniedError",
-    "RBACRouteNotFindError",
+    "APIError",
+    "QueryTimeoutError",
     "PaginationQuery",
     "Pagination",
     "PageResp",

@@ -1,14 +1,14 @@
 import asyncio
-from typing import List, Optional, cast
+from typing import List, Optional
 
-from fastapi import Query
 from odmantic import ObjectId
 from odmantic.query import in_
 from pydantic import BaseModel
-from starlette.requests import Request
 
-from {{cookiecutter.project_name}}.api.user import SimpleUser, User
+from {{cookiecutter.project_name}}.api.user import SimpleUser
 from {{cookiecutter.project_name}}.db import engine
+from {{cookiecutter.project_name}}.models.user import User
+from {{cookiecutter.project_name}}.schemas.errors import DataNotFoundError, PermissionDeniedError
 
 from .model import Permission, Role, RoleID
 
@@ -22,14 +22,16 @@ class RoleProfile(BaseModel):
     enabled: bool
 
 
+async def get_role(id: str | ObjectId) -> Optional[Role]:
+    return await engine.find_one(Role, Role.id == id)
+
+
 async def get_role_profile(id: RoleID) -> RoleProfile:
-    role = await engine.find_one(Role, Role.id == id)
+    role = await get_role(id)
     if role is None:
-        raise ValueError(f"Role not find: {id}")
+        raise DataNotFoundError(f"Role(id={id})")
     users_fut = asyncio.ensure_future(engine.find(SimpleUser, {"roles": id}))
-    permissions_fut = asyncio.ensure_future(
-        engine.find(Permission, in_(Permission.name, role.permissions))
-    )
+    permissions_fut = asyncio.ensure_future(engine.find(Permission, in_(Permission.name, role.permissions)))
 
     users = await users_fut
     permissions = await permissions_fut
@@ -43,16 +45,9 @@ async def get_role_profile(id: RoleID) -> RoleProfile:
     )
 
 
-async def get_role(
-    role_id: Optional[str] = Query(None),
-    role_name: Optional[str] = Query(None),
-) -> Optional[Role]:
-    if role_id:
-        return await engine.find_one(Role, Role.id == ObjectId(role_id))
-    if role_name:
-        return await engine.find_one(Role, Role.name == role_name)
-    return None
-
-
-async def get_request_user(request: Request) -> Optional[User]:
-    return cast(Optional[User], getattr(request.state, "user", None))
+async def remove_role(id: RoleID) -> None:
+    role = await engine.must_find_one(Role, id=id)
+    if role.name == "admin":
+        raise PermissionDeniedError(msg="delete admin")
+    await engine.get_collection(User).update_many({"roles": role.name}, {"$pull": {"roles": role.name}})
+    await engine.delete(role)

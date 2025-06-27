@@ -6,7 +6,6 @@ from typing import cast
 
 from loguru import logger
 
-
 from {{cookiecutter.project_name}}.settings import settings
 
 
@@ -30,7 +29,7 @@ class InterceptHandler(logging.Handler):
         )
 
 
-def install_logger():
+def install_logger() -> None:
     LOGGING_LEVEL = logging.DEBUG if settings.DEBUG else logging.INFO
     LOGGERS = ("uvicorn.asgi", "uvicorn.access")
 
@@ -39,20 +38,16 @@ def install_logger():
         logging_logger = logging.getLogger(logger_name)
         logging_logger.handlers = [InterceptHandler(level=LOGGING_LEVEL)]
 
-    log_file_path = os.path.join(
-        settings.BASE_DIR, f"logs/{settings.PROJECT_NAME}.out.log"
-    )
-    err_log_file_path = os.path.join(
-        settings.BASE_DIR, f"logs/{settings.PROJECT_NAME}.err.log"
-    )
+    log_file_path = os.path.join(settings.BASE_DIR, "logs", f"{settings.PROJECT_NAME}.out.log")
+    err_log_file_path = os.path.join(settings.BASE_DIR, "logs", f"{settings.PROJECT_NAME}.err.log")
 
     loguru_config = {
         "handlers": [
             {
                 "sink": sys.stderr,
                 "level": "INFO",
-                # "format": "<green>{time:YYYY-mm-dd HH:mm:ss.SSS}</green> | {thread.name} | <level>{level}</level> | "
-                #         "<cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+                "format": "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | {thread.name} | <level>{level}</level> | "
+                "<cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
             },
             {"sink": log_file_path, "rotation": "500 MB", "encoding": "utf-8"},
             {

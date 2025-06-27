@@ -2,10 +2,10 @@
 __pycache__
 
 # app
-.dev.env
 .prod.env
 
 .pytest_cache
+.mypy_cache
 .hypothesis
 logs
 pdm.lock

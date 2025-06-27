@@ -1,25 +1,14 @@
-import asyncio
-
-from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import MongoClient
-
-
-from {{cookiecutter.project_name}}.settings import settings
-
 from .mongodb import (
     AIOEngine,
+    async_db,
+    client,
+    db,
+    engine,
     get_instances,
     get_pagination,
     get_query_expression,
     get_sort_expression,
 )
-
-# odmantic for most service with ODM
-client = AsyncIOMotorClient(settings.MONGO_URI)
-client.get_io_loop = asyncio.get_running_loop
-async_db = client[settings.MONGO_DB_NAME]
-engine = AIOEngine(client, database=settings.MONGO_DB_NAME)
-db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)
 
 __all__ = (
     "AIOEngine",
@@ -27,4 +16,8 @@ __all__ = (
     "get_query_expression",
     "get_pagination",
     "get_instances",
+    "client",
+    "async_db",
+    "engine",
+    "db",
 )

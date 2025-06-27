@@ -1,4 +1,3 @@
 from fastapi import APIRouter
 
-
-router = APIRouter(prefix="/dashboard")
+router = APIRouter(prefix="/dashboard", tags=["DASHBOARD"])

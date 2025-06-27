@@ -6,7 +6,7 @@ from typing import Literal, Union
 def hashed(
     value: Union[str, bytes, Path],
     engine: Literal["md5", "sha1", "sha256"] = "md5",
-):
+) -> str:
     if engine == "md5":
         hash_engine = hashlib.md5()
     elif engine == "sha1":

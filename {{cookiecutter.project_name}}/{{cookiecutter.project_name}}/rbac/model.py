@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Annotated, List, Optional, Set, TypeAlias
+from typing import Annotated, Iterable, List, Optional, Set, TypeAlias, TypeVar
 
 from odmantic import Field, Model, ObjectId, WithBsonSerializer
+from odmantic.config import ODMConfigDict
 from pydantic import PlainSerializer, StringConstraints
 
 RoleID: TypeAlias = ObjectId
@@ -9,13 +10,13 @@ RoleName: TypeAlias = str
 PermissionID: TypeAlias = ObjectId
 PermissionName: TypeAlias = Annotated[
     str,
-    StringConstraints(
-        strip_whitespace=True, to_lower=True, min_length=1, max_length=128
-    ),
+    StringConstraints(strip_whitespace=True, to_lower=True, min_length=1, max_length=128, pattern=r"^\S+$"),
 ]
 
+_T = TypeVar("_T")
 
-def frozenset_serializer(v):
+
+def frozenset_serializer(v: Iterable[_T]) -> list[_T]:
     arr = list(v)
     arr.sort()
     return arr
@@ -47,16 +48,16 @@ class Role(Model):
     permissions: PermissionNames = Field([])
     enabled: bool = True
 
-    model_config = {"collection": "role"}
+    model_config = ODMConfigDict({"collection": "role"})
 
 
 class Permission(Model):
     name: PermissionName
     description: str = ""
     creator: Optional[ObjectId] = Field(default=None, description="创建人")
-    expire_at: Optional[datetime] = Field(default=None, description="失效时间")
+    expire_at: Optional[datetime] = Field(description="失效时间", default_factory=datetime.now)
 
-    model_config = {"collection": "permission"}
+    model_config = ODMConfigDict({"collection": "permission"})
 
 
 class RBACRoute(Model):
@@ -69,7 +70,7 @@ class RBACRoute(Model):
     deprecated: bool = False
     permissions: PermissionNames = Field([])
 
-    model_config = {"collection": "rbac_route"}
+    model_config = ODMConfigDict({"collection": "rbac_route"})
 
 
 class Menu(Model):
@@ -79,4 +80,4 @@ class Menu(Model):
     enabled: bool = True
     permissions: PermissionNames = Field([])
 
-    model_config = {"collection": "menu", "parse_doc_with_default_factories": True}
+    model_config = ODMConfigDict({"collection": "menu", "parse_doc_with_default_factories": True})

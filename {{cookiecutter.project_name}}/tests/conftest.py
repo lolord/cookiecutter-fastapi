@@ -1,15 +1,16 @@
 from __future__ import absolute_import
 
 from datetime import timedelta
+from typing import Generator
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest, Parser
 
-from {{cookiecutter.project_name}}.api.user import User
 from {{cookiecutter.project_name}}.db.mongodb import db
 from {{cookiecutter.project_name}}.main import app as test_app
+from {{cookiecutter.project_name}}.models.user import User
 from {{cookiecutter.project_name}}.services.security import (
     create_access_token,
     get_password_hash,
@@ -17,7 +18,7 @@ from {{cookiecutter.project_name}}.services.security import (
 from {{cookiecutter.project_name}}.settings import settings
 
 
-def pytest_configure(config):
+def pytest_configure(config):  # pragma: no cover
     """配置 markers, 结合命令行参数-m使用:
     在命令行通过-m指定运行mark打标的case
     $ pytest -v -m unit
@@ -30,7 +31,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "uat: tests for User Acceptance Test")
 
 
-def pytest_addoption(parser: Parser):
+def pytest_addoption(parser: Parser):  # pragma: no cover
     """配置自定义命令行参数"""
     mongo_uri = parser.addoption("--mongo", help="set mongo uri")
     if mongo_uri:
@@ -40,18 +41,18 @@ def pytest_addoption(parser: Parser):
         settings.REDIS_HOST = redis_host
 
 
-def pytest_report_header(config):
+def pytest_report_header(config):  # pragma: no cover
     """配置报告头信息"""
 
 
 @pytest.fixture
-def redis_uri(request: FixtureRequest):
+def redis_uri(request: FixtureRequest):  # pragma: no cover
     """获取命令行参数 redis_uri"""
     return request.config.getoption("--redis")
 
 
 @pytest.fixture
-def mongo_uri(request: FixtureRequest):
+def mongo_uri(request: FixtureRequest):  # pragma: no cover
     """获取命令行参数 mongo_uri"""
     return request.config.getoption("--mongo")
 
@@ -62,8 +63,9 @@ def app() -> FastAPI:
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
-    return TestClient(app=test_app)
+def client() -> Generator[TestClient, None, None]:
+    with TestClient(app=test_app, raise_server_exceptions=False) as tc:
+        yield tc
 
 
 @pytest.fixture(scope="module")
@@ -88,11 +90,10 @@ def admin(admin_raw: dict):
 
 
 @pytest.fixture(scope="module")
-def admin_token(admin: User):
+def admin_token_headers(admin: User):
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return create_access_token(
-        data={"sub": admin.email}, expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": admin.email}, expires_delta=access_token_expires)
+    return {"Authorization": f"Bearer {access_token}"}
 
 
 @pytest.fixture(scope="module")
@@ -116,8 +117,7 @@ def tester(tester_raw: dict):
 
 
 @pytest.fixture(scope="module")
-def tester_token(tester: User):
+def tester_token_headers(tester: User):
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return create_access_token(
-        data={"sub": tester.email}, expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": tester.email}, expires_delta=access_token_expires)
+    return {"Authorization": f"Bearer {access_token}"}

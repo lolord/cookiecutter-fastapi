@@ -1,14 +1,24 @@
-from typing import Annotated, Optional, cast
+"""Role-Based Access Control
 
-from fastapi import APIRouter, Body, Depends, Path, Query
+The RBACMiddleware will take over routing access permissions
+"""
+
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Body, Depends, Path
 from odmantic import ObjectId
-from odmantic.field import FieldProxy
-from odmantic.query import in_
-from pydantic import BaseModel, Field, constr
+from pydantic import BaseModel, Field
 
-from {{cookiecutter.project_name}}.api.user import User
 from {{cookiecutter.project_name}}.db import engine
-from {{cookiecutter.project_name}}.schemas import APIState, PageResp, PaginationQuery, Resp
+from {{cookiecutter.project_name}}.schemas import (
+    APIState,
+    PageResp,
+    PaginationQuery,
+    Resp,
+    errors,
+)
+from {{cookiecutter.project_name}}.schemas.errors import APIError
+from {{cookiecutter.project_name}}.services.security import RequestUser
 
 from .model import (
     Menu,
@@ -19,7 +29,7 @@ from .model import (
     Role,
     RoleID,
 )
-from .service import RoleProfile, get_request_user, get_role_profile
+from .service import RoleProfile, get_role_profile, remove_role
 
 router = APIRouter(
     prefix="/rbac",
@@ -37,6 +47,7 @@ class RoleQuery(PaginationQuery):
 @router.get(
     "/roles",
     summary="管理员获取角色列表",
+    name="rbac:roles",
 )
 async def get_roles(
     query: RoleQuery = Depends(),
@@ -44,28 +55,32 @@ async def get_roles(
     return await engine.find_pagination(Role, query)
 
 
-@router.get("/roles/{id}", summary="角色信息")
+@router.get(
+    "/roles/{id}",
+    summary="角色信息",
+    name="rbac:role-profile",
+)
 async def get_role(id: RoleID = Path(...)) -> Resp[RoleProfile]:
     return Resp(data=await get_role_profile(id=id))
 
 
-@router.post("/roles", summary="创建角色")
+@router.post("/roles", summary="创建角色", name="rbac:roles")
 async def post_role(role: Role = Body(...)) -> Resp[Role]:
     exists = await engine.count(Role, Role.name == role.name)
     if exists:
-        raise ValueError(f"role: {role.name} already exists")
+        raise errors.DataExistedError(f"Role(name={role.name})")
 
     await engine.save(role)
     return Resp(data=role)
 
 
-@router.put("/roles", summary="编辑角色信息")
+@router.put("/roles", summary="编辑角色信息", name="rbac:roles")
 async def edit_roles(role: Role = Body(...)) -> Resp[Role]:
     exists = await engine.exists(Role, Role.id == role.id)
     if not exists:
-        return Resp(code=APIState.DATA_NOT_FOUND, msg="role does not exist.")
+        raise errors.DataNotFoundError(f"Role(id={role.id})")
     if role.name == "admin":
-        return Resp(code=APIState.PERMISSION_DENIED, msg="Not enough permissions.")
+        raise APIError(code=APIState.PERMISSION_DENIED, msg="Not enough permissions.")
     role = await engine.save(role)
     return Resp(data=role)
 
@@ -73,118 +88,126 @@ async def edit_roles(role: Role = Body(...)) -> Resp[Role]:
 @router.delete(
     "/roles/{id}",
     summary="删除角色",
+    name="rbac:roles",
 )
-async def delete_roles(
-    id: RoleID = Path(...), force: bool = Query(False, description="强制删除")
-) -> Resp[None]:
-    role = await engine.find_one(Role, Role.id == id)
-    if not role:
-        return Resp(code=APIState.DATA_EXISTED, msg="role does not exist.")
-    if role.name == "admin":
-        return Resp(code=APIState.DATA_DELETED, msg="admin cannot be deleted.")
+async def delete_role(id: RoleID = Path(...)) -> Resp[None]:
+    await remove_role(id)
+    return Resp(data=None)
 
-    users = await engine.find(User, User.roles == id)
-    if users and not force:
-        return Resp(code=APIState.OPERATE_INVALID, msg="role member is not empty.")
-    else:
-        for user in users:
-            user.roles.remove(role.name)
-        await engine.save_all(users)
-    await engine.delete(role)
-    return Resp()
+
+class PermissionQuery(PaginationQuery):
+    name: Optional[PermissionName] = None
+    creator: Optional[ObjectId] = Field(default=None, description="创建人")
+
+
+@router.get(
+    "/permissions",
+    summary="权限列表",
+    name="rbac:permissions",
+)
+async def get_permissions(query: PermissionQuery = Depends()) -> PageResp[Permission]:
+    return await engine.find_pagination(Permission, query)
+
+
+@router.post("/permissions", summary="新增权限", name="rbac:permissions")
+async def post_permission(permission: Annotated[Permission, Body(...)]) -> Resp[Permission]:
+    if await engine.exists(Permission, Permission.name == permission.name):
+        raise errors.DataNotFoundError(f"Permission(name={permission.name})")
+    await engine.upsert_one(permission, Permission.id == permission.id)
+    return Resp(data=permission)
+
+
+async def validate_permission(id: ObjectId = Path(...)) -> Permission:
+    permission = await engine.must_find_one(Permission, id=id)
+    return permission
+
+
+@router.put("/permissions", summary="修改权限", name="rbac:permissions")
+async def put_permission(permission: Annotated[Permission, Body(...)]) -> Resp[Permission]:
+    same_name = await engine.exists(Permission, Permission.name == permission.name, Permission.id != permission.id)
+    if same_name:
+        raise errors.DataExistedError(f"Permission(name={permission.id})")
+    old = await validate_permission(permission.id)
+    await engine.save(permission)
+    if old.name != permission.name:
+        update = {"$push": {"permissions": permission.name}}
+        await engine.get_collection(RBACRoute).update_many({}, update)
+        await engine.get_collection(Menu).update_many({}, update)
+        await engine.get_collection(Role).update_many({}, update)
+        update = {"$pull": {"permissions": old.name}}
+        await engine.get_collection(RBACRoute).update_many({}, update)
+        await engine.get_collection(Menu).update_many({}, update)
+        await engine.get_collection(Role).update_many({}, update)
+    return Resp(data=permission)
+
+
+@router.delete("/permissions/{id}", summary="删除权限", name="rbac:permissions")
+async def delete_permission(permission: Annotated[Permission, Depends(validate_permission)]) -> Resp[None]:
+    await engine.delete(permission)
+
+    update = {"$pull": {"permissions": permission.name}}
+    await engine.get_collection(RBACRoute).update_many({}, update)
+    await engine.get_collection(Menu).update_many({}, update)
+    await engine.get_collection(Role).update_many({}, update)
+    return Resp(data=None)
 
 
 @router.get(
     "/routes",
     summary="路由列表",
+    name="rbac:routes",
 )
 async def get_routes(query: PaginationQuery = Depends()) -> PageResp[RBACRoute]:
-    if not query.sort_by:
-        query.sort_by = +cast(FieldProxy, RBACRoute.tags)
-    return await engine.find_pagination(
-        RBACRoute, query, {+RBACRoute.deprecated: False}
-    )
+    return await engine.find_pagination(RBACRoute, query, {+RBACRoute.deprecated: False})
 
 
-async def validate_route(id: ObjectId = Path(...)):
-    route = await engine.find_one(RBACRoute, RBACRoute.id == id)
-    if not route:
-        raise ValueError(f"RBACRoute(id={id}) does not exist")
+async def validate_route(id: ObjectId = Path(...)) -> RBACRoute:
+    return await engine.must_find_one(RBACRoute, id=id)
 
-    return route
+
+class PermissionPost(BaseModel):
+    permissions: PermissionNames = Field(...)
 
 
 @router.post(
     "/routes/{id}/permissions",
-    summary="添加路由权限",
+    summary="编辑路由权限",
+    name="rbac:routes:permissions",
 )
-async def post_route_permission(
+async def post_route_permissions(
+    update: Annotated[PermissionPost, Body(...)],
+    user: RequestUser,
     route: RBACRoute = Depends(validate_route),
-    permission: Annotated[str, constr(strip_whitespace=True, to_lower=True)] = Body(
-        ...
-    ),
-    user: User = Depends(get_request_user),
 ) -> Resp[RBACRoute]:
-    if permission in route.permissions:
-        raise ValueError(f"{permission} already exists")
-
-    route.permissions.add(permission)
+    route.permissions.update(update.permissions)
     await engine.save(route)
-    if await engine.find(Permission, in_(Permission.id, list(permission))) == 0:
-        await engine.save(Permission(name=permission, creator=user.id))  # type: ignore
-
+    for name in update.permissions:
+        if not await engine.exists(Permission, Permission.name == name):
+            await engine.save(Permission(name=name, creator=user.id))  # type: ignore
     return Resp(data=route)
 
 
-@router.delete(
-    "/routes/{id}/permissions",
-    summary="删除路由权限",
-)
-async def delete_route_permission(
-    route: RBACRoute = Depends(validate_route),
-    permission: Annotated[str, constr(strip_whitespace=True, to_lower=True)] = Body(
-        ...
-    ),
-) -> Resp[RBACRoute]:
-    if permission not in route.permissions:
-        raise ValueError(f"{permission} does not exist")
-
-    route.permissions.remove(permission)
-    await engine.save(route)
-    return Resp(data=route)
+class MenuQuery(PaginationQuery):
+    sort_by: str = "path"
 
 
-@router.get("/menus", summary="菜单列表")
-async def get_menu(query: PaginationQuery = Depends()) -> PageResp[Menu]:
-    if not query.sort_by:
-        query.sort_by = str(Menu.path)
+@router.get("/menus", summary="菜单列表", name="rbac:menus")
+async def get_menus(query: Annotated[MenuQuery, Depends()]) -> PageResp[Menu]:
     return await engine.find_pagination(Menu, query)
 
 
-class MenuPost(BaseModel):
-    path: str = Field(..., min_length=1, max_length=128)
-    title: str = Field(..., min_length=1, max_length=128)
-    description: str = ""
-    enabled: bool = True
-    permissions: PermissionNames = Field([])
-
-
-@router.post("/menus", summary="新增菜单")
-async def post_menu(post: MenuPost = Depends()) -> Resp[Menu]:
-    menu = Menu(**post.model_dump())
-    await engine.save(menu)
+@router.put("/menus", summary="修改菜单", name="rbac:menus")
+@router.post("/menus", summary="新增菜单", name="rbac:menus")
+async def post_menu(menu: Annotated[Menu, Body(...)]) -> Resp[Menu]:
+    await engine.upsert_one(menu, Menu.id == menu.id)
     return Resp(data=menu)
 
 
-@router.put("/menus", summary="修改菜单", response_model=Menu)
-async def put_menu(menu: Menu = Depends()):
-    return await engine.save(menu)
+async def validate_menu(id: ObjectId = Path(...)) -> Menu:
+    return await engine.must_find_one(Menu, id=id)
 
 
-@router.delete("/menus/{mid}", summary="删除菜单")
-async def delete_menu(mid: ObjectId = Path(...)) -> Resp[None]:
-    menu = await engine.find_one(Menu, Menu.id == mid)
-    if not menu:
-        return Resp(code=APIState.DATA_NOT_FOUND, msg=f"Not find Menu({mid})")
+@router.delete("/menus/{id}", summary="删除菜单", name="rbac:menus:remove")
+async def delete_menu(menu: Annotated[Menu, Depends(validate_menu)]) -> Resp[None]:
     await engine.delete(menu)
-    return Resp()
+    return Resp(data=None)

@@ -1,48 +1,84 @@
 import asyncio
-import re
-from typing import Dict, List, Optional, Type, TypeAlias, TypeVar, Union
+from typing import Any, Dict, List, Optional, Type, TypeAlias, Union
 
+from anyio import fail_after
 from motor.motor_asyncio import AsyncIOMotorClient
-from odmantic.bson import ObjectId
 from odmantic.engine import AIOEngine as ODMAIOEngine
-from odmantic.model import Model
-from odmantic.query import QueryExpression, SortExpression, asc, desc
+from odmantic.engine import AIOSessionType, ModelType
+from odmantic.query import QueryExpression, SortExpression, asc, desc, or_
+from odmantic.query import match as match_
 from pydantic import BaseModel
 from pymongo import MongoClient
+from pymongo.database import Database
 
-from {{cookiecutter.project_name}}.schemas import DBTimeoutError, PageResp, Pagination
+from {{cookiecutter.project_name}}.schemas import (
+    PageResp,
+    Pagination,
+    QueryTimeoutError,
+)
+from {{cookiecutter.project_name}}.schemas.errors import DataInvalidError, DataNotFoundError
+from {{cookiecutter.project_name}}.schemas.request import PaginationQuery
 from {{cookiecutter.project_name}}.settings import settings
 from {{cookiecutter.project_name}}.utils.logger import logger
 
-ModelType = TypeVar("ModelType", bound=Model)
-
 QueryType: TypeAlias = Union[BaseModel, QueryExpression, Dict, bool]
+ExtraQueryType: TypeAlias = Union[BaseModel, Dict]
 
 
-async def get_sort_expression(
-    model: Type[ModelType], query: QueryType
-) -> Optional[SortExpression]:
+def get_field(model: Type[ModelType], name: str) -> Optional[Any]:
+    """
+    Get a field from the model by its name.
+    """
+    if hasattr(model, name):
+        return getattr(model, name)
+    raise DataInvalidError(f"{name} attribute of {+model}")
+
+
+async def get_sort_expression(model: Type[ModelType], query: QueryType) -> Optional[SortExpression]:
     sort_by = getattr(query, "sort_by", None)
     sort_order = getattr(query, "sort_order", None)
     sort = None
     if sort_by:
+        field = get_field(model, sort_by)
         if sort_order == "descend":
-            sort = desc(getattr(model, sort_by))
+            sort = desc(field)
         elif sort_order == "ascend":
-            sort = asc(getattr(model, sort_by))
+            sort = asc(field)
+        else:
+            raise DataInvalidError("sort_order must be 'ascend' or 'descend'")
     return sort
 
 
+async def advanced_query(model: Type[ModelType], query: PaginationQuery) -> dict:
+    queries = []
+    q = getattr(query, "q", None)
+    keys = getattr(query, "keys", None)
+    if q and keys:
+        for field_name in keys:
+            if field_name.startswith("re_"):
+                field = get_field(model, field_name.replace("re_", "", 1))
+                queries.append(match_(field, q.strip()))
+            else:
+                queries.append(get_field(model, field_name) == q.strip())
+        if len(queries) == 1:
+            return queries[0]
+        return or_(*queries)
+    return {}
+
+
 async def get_query_expression(
-    query: Optional[QueryType],
-    extra_query: Optional[QueryType] = None,
-):
+    model: Type[ModelType],
+    query: QueryType | None,
+    extra_query: Optional[ExtraQueryType] = None,
+) -> dict:
     if isinstance(query, BaseModel):
         query_dict = query.model_dump(
             exclude_unset=True,
             exclude_none=True,
-            exclude={"page", "page_size", "sort_by", "sort_order"},
+            exclude={"page", "page_size", "sort_by", "sort_order", "q", "keys"},
         )
+        if isinstance(query, PaginationQuery):
+            query_dict.update(await advanced_query(model, query))
     elif isinstance(query, dict):
         query_dict = query
     else:
@@ -51,78 +87,76 @@ async def get_query_expression(
     if extra_query:
         if isinstance(extra_query, BaseModel):
             query_dict.update(extra_query.model_dump())
-        elif isinstance(extra_query, dict):
+        if isinstance(extra_query, dict):
             query_dict.update(extra_query)
-        else:
-            raise ValueError(f"Invalid query expression: {query_dict}")
-    q = query_dict.pop("q", None)
-    keys = query_dict.pop("keys", None)
-    if q and keys:
-        query_dict["$or"] = []
-        for f in keys:
-            if f == "_id":
-                try:
-                    query_dict["$or"].append({f: ObjectId(q.strip())})
-                except Exception:
-                    """nothing"""
-            elif f.startswith("re_"):
-                query_dict["$or"].append(
-                    {f.replace("re_", "", 1): {"$regex": re.compile(q.strip())}}
-                )
-            else:
-                query_dict["$or"].append({f: q.strip()})
 
-    logger.info(f"query_dict {query_dict}")
     return query_dict
+
+
+async def _get_count(engine: "AIOEngine", model: Type[ModelType], query_dict: dict) -> int:
+    if query_dict:
+        return await engine.client[engine.database_name][+model].count_documents(query_dict)
+    else:
+        return await engine.get_collection(model).estimated_document_count()
 
 
 async def get_pagination(
     engine: "AIOEngine",
     model: Type[ModelType],
     query: QueryType,
-    extra_query: Optional[QueryType] = None,
-):
+    extra_query: Optional[ExtraQueryType] = None,
+) -> Pagination:
     page_size = getattr(query, "page_size", 10)
     page = getattr(query, "page", 1)
-    query_dict = await get_query_expression(query, extra_query)
+    query_dict = await get_query_expression(model, query, extra_query)
 
-    if query_dict:
-        coro = engine.client[engine.database_name][+model].count_documents(query_dict)
-    else:
-        coro = engine.get_collection(model).estimated_document_count()
     try:
-        total_count = await asyncio.wait_for(coro, timeout=settings.MONGO_TIMROUT)
-    except asyncio.TimeoutError:
-        raise DBTimeoutError(f"DBTimeoutError: {model} {query_dict}")
+        with fail_after(settings.MONGO_QUERY_TIMEOUT):
+            total_count = await _get_count(engine, model, query_dict)
+    except TimeoutError:
+        raise QueryTimeoutError(f"collection={+model} query={query_dict}")
 
-    return Pagination(
-        page=page,
-        page_size=page_size,
-        total_count=total_count,
-    )
+    return Pagination(page=page, page_size=page_size, total_count=total_count)
+
+
+async def _get_instances(
+    engine: "AIOEngine",
+    model: Type[ModelType],
+    query_dict: dict,
+    sort: Optional[SortExpression] = None,
+    skip: int = 0,
+    limit: Optional[int] = None,
+    session: AIOSessionType = None,
+) -> List[ModelType]:
+    return await engine.find(model, query_dict, sort=sort, skip=skip, limit=limit, session=session)
 
 
 async def get_instances(
     engine: "AIOEngine",
     model: Type[ModelType],
     query: QueryType,
-    extra_query: Optional[QueryType] = None,
-    **extra,
+    extra_query: Optional[ExtraQueryType] = None,
+    skip: int = 0,
+    limit: Optional[int] = None,
+    session: AIOSessionType = None,
 ) -> List[ModelType]:
-    query_dict = await get_query_expression(query, extra_query)
+    query_dict = await get_query_expression(model, query, extra_query)
     sort = await get_sort_expression(model, query)
-    # sort需要配合修改
-    # data = await motor_find(model, query_dict, skip=pagination.start, limit=page_size, sort=sort)
-    # find在init里面替换成motor_find
-    return await engine.find(model, query_dict, sort=sort, **extra)
+    logger.info(f"query_dict {query_dict}")
+    logger.info(f"sort {sort}")
+    try:
+        with fail_after(settings.MONGO_QUERY_TIMEOUT):
+            return await _get_instances(engine, model, query_dict, sort=sort, skip=skip, limit=limit, session=session)
+    except TimeoutError:
+        raise QueryTimeoutError(f"collection={+model} query={query_dict} {sort=} {skip=} {limit=}")
 
 
 async def find_pagination(
     engine: "AIOEngine",
     model: Type[ModelType],
     query: QueryType,
-    extra_query: Optional[QueryType] = None,
-):
+    extra_query: Optional[ExtraQueryType] = None,
+) -> PageResp[ModelType]:
     pagination = await get_pagination(engine, model, query, extra_query)
     data = await get_instances(
         engine,
@@ -137,10 +171,13 @@ async def find_pagination(
 
 
 async def paginate_aggregate(
-    engine: "AIOEngine", model: Type[ModelType], query, extra_query
-) -> PageResp[ModelType]:
+    engine: "AIOEngine",
+    model: Type[ModelType],
+    query: QueryType,
+    extra_query: ExtraQueryType | None = None,
+) -> PageResp[ModelType]:  # pragma: no cover
     aggregate_pipeline = []
-    query_dict = await get_query_expression(query, extra_query)
+    query_dict = await get_query_expression(model, query, extra_query)
 
     if query_dict:
         aggregate_pipeline.append({"$match": query_dict})
@@ -184,28 +221,42 @@ async def paginate_aggregate(
 
 class AIOEngine(ODMAIOEngine):
     async def find_pagination(
-        self, model: Type[ModelType], query, extra_query=None
+        self, model: Type[ModelType], query: QueryType, extra_query: dict | None = None
     ) -> PageResp[ModelType]:
-        return await find_pagination(self, model, query, extra_query)
+        resp: PageResp[ModelType] = await find_pagination(self, model, query, extra_query)
+        return resp
 
-    async def exists(self, model: Type[ModelType], *queries) -> bool:
+    async def exists(self, model: Type[ModelType], *queries: QueryExpression | Dict | bool) -> bool:
         return await self.find_one(model, *queries) is not None
 
-    async def upsert(self, instance: ModelType, *queries) -> ModelType:
+    async def upsert_one(self, instance: ModelType, *queries: QueryExpression | Dict | bool) -> ModelType:
         model: Type[ModelType] = type(instance)
         old = await self.find_one(model, *queries)
         if old and instance.id != old.id:
-            old.model_update(
-                instance.model_dump(exclude={model.__primary_field__, "id"})
-            )
+            old.model_update(instance.model_dump(exclude={model.__primary_field__, "id"}))
             return await self.save(old)
         else:
             return await self.save(instance)
 
+    async def must_find_one(
+        self,
+        model: Type[ModelType],
+        sort: Optional[Any] = None,
+        session: AIOSessionType = None,
+        **queries: Any,
+    ) -> ModelType:
+        _queries = [getattr(model, k) == v for k, v in queries.items()]
+        data = await self.find_one(model, *_queries, sort=sort, session=session)
+        if data is None:
+            name = model.__name__
+            args = ", ".join(f"{k}={v}" for k, v in queries.items())
+            raise DataNotFoundError(data=f"{name}({args})")
+        return data
+
 
 # odmantic for most service with ODM
-client = AsyncIOMotorClient(settings.MONGO_URI)
-client.get_io_loop = asyncio.get_running_loop
+client: AsyncIOMotorClient = AsyncIOMotorClient(settings.MONGO_URI)
+client.get_io_loop = asyncio.get_running_loop  # type: ignore
 async_db = client[settings.MONGO_DB_NAME]
-engine = AIOEngine(client, database=settings.MONGO_DB_NAME)
-db = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)
+engine: AIOEngine = AIOEngine(client, database=settings.MONGO_DB_NAME)
+db: Database = MongoClient(settings.MONGO_URI).get_database(settings.MONGO_DB_NAME)

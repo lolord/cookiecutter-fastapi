@@ -1,6 +1,6 @@
 import aioredis
-from redis import from_url
+import redis
 from settings import settings
 
-redis = aioredis.from_url(settings.REDIS_URI)
-redis_db = from_url(settings.REDIS_URI)
+aio_redis: aioredis.Redis = aioredis.from_url(settings.REDIS_URI)  # type: ignore[no-untyped-call]
+redis_db: redis.Redis = redis.from_url(settings.REDIS_URI)

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, TypeAlias
 
 from odmantic import Field, Index, Model, ObjectId
+from odmantic.config import ODMConfigDict
 from odmantic.query import asc
 from pydantic import EmailStr
 
@@ -25,24 +26,26 @@ class User(Model):
 
     expire_at: Optional[datetime] = Field(default=None, description="失效时间")
 
-    model_config = {
-        "collection": "user",
-        "parse_doc_with_default_factories": True,
-        "indexes": lambda: [
-            Index(User.email, unique=True),
-            Index(User.nickname),
-            Index(asc(User.c_at)),
-        ],
-    }
+    model_config = ODMConfigDict(
+        {
+            "collection": "user",
+            "parse_doc_with_default_factories": True,
+            "indexes": lambda: [
+                Index(User.email, unique=True),
+                Index(User.nickname),
+                Index(asc(User.c_at)),
+            ],
+        }
+    )
 
 
 class SimpleUser(Model):
     email: EmailStr = Field(...)
-    nickname: str = Field(..., min_length=3, max_length=14)
+    nickname: str = Field(..., min_length=3, max_length=32)
     enabled: bool = True
     roles: RoleNames = Field([])
 
-    model_config = {"collection": +User}
+    model_config = ODMConfigDict({"collection": +User})
 
 
 # engine = AIOEngine()

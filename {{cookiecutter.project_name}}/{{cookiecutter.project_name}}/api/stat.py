@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from {{cookiecutter.project_name}}.db.backend import redis_db
 from {{cookiecutter.project_name}}.schemas import PageResp, Pagination, PaginationQuery
+from {{cookiecutter.project_name}}.schemas.response import Resp
 
 router = APIRouter(prefix="/server-stat", tags=["SERVER STAT"])
 
@@ -20,17 +21,15 @@ class CPU(BaseModel):
     at: int
 
 
-@router.get("/cpu", summary="获取cpu占用率", response_model=List[CPU])
+@router.get("/cpu", summary="获取cpu占用率")
 async def get_cpu(
-    limit: int = Query(
-        1, description="查询 [1, 3, 5, 10, 15, 30, 60] 分钟内的cpu使用率"
-    ),
-):
-    return [json.loads(i) for i in redis_db.lrange("sys_cpu_dynamic", 0, limit * 60)]
+    limit: int = Query(1, description="查询 [1, 3, 5, 10, 15, 30, 60] 分钟内的cpu使用率"),
+) -> Resp[List[CPU]]:
+    return Resp(data=[json.loads(i) for i in redis_db.lrange("sys_cpu_dynamic", 0, limit * 60)])
 
 
 @functools.lru_cache(1)
-def get_cpu_type():
+def get_cpu_type() -> str:
     try:
         with open("/proc/cpuinfo") as f:  # 获取cpu型号
             for line in f:
@@ -40,25 +39,7 @@ def get_cpu_type():
                         return cpu_name.split()[0]
     except IOError:
         return "No permission"
-
-
-@functools.lru_cache(1)
-def system_parameter():
-    cpu_thread = psutil.cpu_count()  # CPU逻辑数量
-    cpu_core = psutil.cpu_count(logical=False)  # CPU物理核心
-    host_name = platform.node()  # 电脑名称
-    sysname, nodename, release, version, machine = os.uname()  # type: ignore
-    return {
-        "cpu_type": get_cpu_type(),
-        "cpu_thread": cpu_thread,
-        "cpu_core": cpu_core,
-        "host_name": host_name,
-        "sysname": sysname,
-        "nodename": nodename,
-        "release": release,
-        "version": version,
-        "machine": machine,  # 获取操作系统架构
-    }
+    return ""
 
 
 class SystemParameter(BaseModel):
@@ -73,9 +54,30 @@ class SystemParameter(BaseModel):
     machine: str = Field(..., description="操作系统架构")
 
 
-@router.get("/system-parameter", summary="获取系统参数", response_model=SystemParameter)
-async def get_system_parameter():
-    return system_parameter()
+@functools.lru_cache(1)
+def system_parameter() -> SystemParameter:
+    cpu_thread = psutil.cpu_count()  # CPU逻辑数量
+    cpu_core = psutil.cpu_count(logical=False)  # CPU物理核心
+    host_name = platform.node()  # 电脑名称
+    sysname, nodename, release, version, machine = os.uname()
+    return SystemParameter.model_validate(
+        {
+            "cpu_type": get_cpu_type(),
+            "cpu_thread": cpu_thread,
+            "cpu_core": cpu_core,
+            "host_name": host_name,
+            "sysname": sysname,
+            "nodename": nodename,
+            "release": release,
+            "version": version,
+            "machine": machine,  # 获取操作系统架构
+        }
+    )
+
+
+@router.get("/system-parameter", summary="获取系统参数")
+async def get_system_parameter() -> Resp[SystemParameter]:
+    return Resp(data=system_parameter())
 
 
 class Memory(BaseModel):
@@ -85,13 +87,11 @@ class Memory(BaseModel):
     per: float = Field(..., description="内存使用率")
 
 
-@router.get("/memory", summary="获取内存占用率", response_model=List[Memory])
+@router.get("/memory", summary="获取内存占用率")
 async def get_memory(
-    limit: int = Query(
-        1, description="查询 [1, 3, 5, 10, 15, 30, 60] 分钟内的cpu使用率"
-    ),
-):
-    return [json.loads(i) for i in redis_db.lrange("sys_mem_dynamic", 0, limit * 12)]
+    limit: int = Query(1, description="查询 [1, 3, 5, 10, 15, 30, 60] 分钟内的cpu使用率"),
+) -> Resp[List[Memory]]:
+    return Resp(data=[json.loads(i) for i in redis_db.lrange("sys_mem_dynamic", 0, limit * 12)])
 
 
 class DiskUsage(BaseModel):
@@ -101,9 +101,9 @@ class DiskUsage(BaseModel):
     percent: float = Field(..., description="磁盘使用率")
 
 
-@router.get("/disk-usage", summary="磁盘使用情况", response_model=DiskUsage)
-async def get_disk_usage():
-    return psutil.disk_usage("/")._asdict()
+@router.get("/disk-usage", summary="磁盘使用情况")
+async def get_disk_usage() -> Resp[DiskUsage]:
+    return Resp(data=psutil.disk_usage("/")._asdict())
 
 
 class DiskIO(BaseModel):
@@ -115,53 +115,53 @@ class DiskIO(BaseModel):
     write_time: int = Field(..., description="磁盘写入时间")
 
 
-@router.get("/disk-io", summary="磁盘io", response_model=DiskIO)
-async def get_disk_io():
-    return psutil.disk_io_counters()._asdict()  # type: ignore
+@router.get("/disk-io", summary="磁盘io")
+async def get_disk_io() -> Resp[DiskIO]:
+    return Resp(data=psutil.disk_io_counters()._asdict())
 
 
 class Process(BaseModel):
     pid: int = Field(..., description="进程ID")
     ppid: int = Field(..., description="父进程ID")
-    name: str = Field(None, description="进程名称")
-    exe: str = Field(None, description="进程exe路径")
-    cwd: str = Field(None, description="进程工作目录")
-    cmdline: List[str] = Field(None, description="进程启动的命令行")
+    name: str | None = Field(None, description="进程名称")
+    exe: str | None = Field(None, description="进程exe路径")
+    cwd: str | None = Field(None, description="进程工作目录")
+    cmdline: List[str] = Field([], description="进程启动的命令行")
     status: str = Field(..., description="进程状态")
-    username: str = Field(None, description="进程用户名")
+    username: str | None = Field(None, description="进程用户名")
     create_time: float = Field(..., description="进程创建时间")
-    terminal: str = Field(None, description="进程终端")
+    terminal: str | None = Field(None, description="进程终端")
 
 
-@router.get("/process", summary="进程列表", response_model=PageResp[Process])
-async def get_process(query: PaginationQuery = Depends()):
+@router.get("/process", summary="进程列表")
+async def get_process(query: PaginationQuery = Depends()) -> PageResp[Process]:
     start = (query.page - 1) * query.page_size
     end = start + query.page_size
     pids = psutil.pids()
-    data = []
+    data: list[Process] = []
     for pid in pids[start:end]:
         p = psutil.Process(pid)
         data.append(
-            {
-                "pid": pid,
-                "ppid": p.ppid(),  # 父进程ID
-                "name": p.name(),
-                "exe": p.exe(),  # 进程exe路径
-                "cwd": p.cwd(),  # 进程工作目录
-                "cmdline": p.cmdline(),  # 进程启动的命令行
-                "status": p.status(),  # 进程状态
-                "username": p.username(),  # 进程用户名
-                "create_time": p.create_time(),  # 进程创建时间
-                "terminal": p.terminal(),  # 进程终端 # type: ignore
-            }
+            Process.model_validate(
+                {
+                    "pid": pid,
+                    "ppid": p.ppid(),  # 父进程ID
+                    "name": p.name(),
+                    "exe": p.exe(),  # 进程exe路径
+                    "cwd": p.cwd(),  # 进程工作目录
+                    "cmdline": p.cmdline(),  # 进程启动的命令行
+                    "status": p.status(),  # 进程状态
+                    "username": p.username(),  # 进程用户名
+                    "create_time": p.create_time(),  # 进程创建时间
+                    "terminal": p.terminal(),  # 进程终端 # type: ignore
+                }
+            )
         )
     total = len(pids)
-    pagination = Pagination(
-        total=total, page=query.page, page_size=query.page_size, total_count=total
-    )
+    pagination = Pagination(total=total, page=query.page, page_size=query.page_size, total_count=total)
     return PageResp(data=data, pagination=pagination)
 
 
-@router.get("/process/{pid}", summary="进程详情", response_model=Dict[str, Any])
-async def get_process_detail(pid: int = Path(...)):
-    return psutil.Process(pid).as_dict()
+@router.get("/process/{pid}", summary="进程详情")
+async def get_process_detail(pid: int = Path(...)) -> Resp[Dict[str, Any]]:
+    return Resp(data=psutil.Process(pid).as_dict())

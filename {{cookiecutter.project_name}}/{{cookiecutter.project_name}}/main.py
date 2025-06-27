@@ -1,35 +1,31 @@
 import os
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import ORJSONResponse
-from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
-from odmantic.exceptions import DocumentParsingError
 from starlette import status
-from starlette.exceptions import HTTPException
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 
 from {{cookiecutter.project_name}}.api import admin, auth, dashboard, publics, user
-from {{cookiecutter.project_name}}.rbac.api import router as rbac_router
+from {{cookiecutter.project_name}}.middlewares.auth_middleware import AuthMiddleware
+from {{cookiecutter.project_name}}.rbac import api as rbac
 from {{cookiecutter.project_name}}.rbac.middleware import RBACMiddleware
-from {{cookiecutter.project_name}}.schemas.errors import APIException
-from {{cookiecutter.project_name}}.services.security import (
-    get_current_user,
-    get_user_permissions,
-    jwt_required,
-)
+from {{cookiecutter.project_name}}.schemas.errors import APIError
+from {{cookiecutter.project_name}}.services.security import jwt_required
 from {{cookiecutter.project_name}}.settings import settings
 from {{cookiecutter.project_name}}.utils.logger import logger
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info(f"startup: {settings.ENV_STATE}")
     await RBACMiddleware.update_rbac_routes(app)
     yield
@@ -44,56 +40,30 @@ app = FastAPI(
     default_response_class=ORJSONResponse,
 )
 
-if not os.path.exists(settings.STATICS_DIR):
-    os.mkdir(settings.STATICS_DIR)
-
-
-app.mount("/statics", StaticFiles(directory="statics"), name="statics")
+statics = os.path.join(os.path.basename(__name__), settings.PROJECT_NAME, "statics")
+app.mount("/statics", StaticFiles(directory=statics), name="statics")
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> Response:
     return ORJSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
     )
 
 
-@app.exception_handler(ValueError)
-async def handler_value_error(request: Request, error: ValueError):
-    if isinstance(error, DocumentParsingError):
-        return ORJSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder(
-                {"detail": error.inner.errors(), "body": error.inner.title}
-            ),
-        )
-    else:
-        return ORJSONResponse(
-            jsonable_encoder({"error": str(error)}),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+    resp = await http_exception_handler(request, exc)
+    return resp
 
 
-@app.exception_handler(HTTPException)
-async def http_error(request: Request, exc: HTTPException):
-    return await http_exception_handler(request, exc)
-
-
-@app.exception_handler(APIException)
-async def handler_api_error(request: Request, error: APIException):
-    logger.error(f"APIException: {repr(error)}")
+@app.exception_handler(APIError)
+async def handler_api_error(request: Request, error: APIError) -> Response:
+    logger.exception(error)
     return ORJSONResponse(
-        jsonable_encoder(error.dict()),
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    )
-
-
-@app.exception_handler(Exception)
-async def handler_unknown_error(request: Request, error: Exception):
-    return ORJSONResponse(
-        jsonable_encoder(str(error)),
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=jsonable_encoder(error.response()),
+        status_code=status.HTTP_400_BAD_REQUEST,
     )
 
 
@@ -105,56 +75,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RBACMiddleware)
-
-
-app.include_router(auth.router, prefix=settings.API_VER, tags=["AUTH"])
-app.include_router(user.router, prefix=settings.API_VER, tags=["USER"])
-app.include_router(
-    admin.router,
-    prefix=settings.API_VER,
-    tags=["ADMIN"],
-    dependencies=[Depends(jwt_required)],
-)
-
-app.include_router(
-    rbac_router, prefix=settings.API_VER, dependencies=[Depends(jwt_required)]
-)
-app.include_router(dashboard.router, prefix=settings.API_VER, tags=["DASHBOARD"])
-app.include_router(publics.router, tags=["PUBLICS"])
-
-
-@app.middleware("http")
-async def set_user(request: Request, call_next):
-    user = None
-    try:
-        token = await APIKeyHeader(name="Access-Token")(request)
-        if token is not None:
-            user = await get_current_user(token)
-    except HTTPException:
-        ...
-
-    if user is not None:
-        user.permissions = await get_user_permissions(user)
-        setattr(request.state, "user", user)
-
-    return await call_next(request)
+app.add_middleware(AuthMiddleware)
 
 
 @app.get("/docsx", include_in_schema=False)
-async def custom_swagger_ui_html():
+async def custom_swagger_ui_html() -> Response:
     assert app.openapi_url
     return get_swagger_ui_html(
         openapi_url=app.openapi_url,
         title=app.title + " - Swagger UI",
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
-        swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui-bundle.js",
-        swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/4.5.0/swagger-ui.css",
+        swagger_js_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.21.0/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.21.0/swagger-ui.css",
         swagger_favicon_url="/statics/api-docs/favicon.png",
     )
 
 
-# uvicorn main:app --host 127.0.0.1 --port 5000 --reload
-if __name__ == "__main__":
+app.include_router(publics.router)
+app.include_router(auth.router, prefix=settings.API_VER)
+app.include_router(user.router, prefix=settings.API_VER)
+app.include_router(admin.router, prefix=settings.API_VER, dependencies=[Depends(jwt_required)])
+app.include_router(dashboard.router, prefix=settings.API_VER)
+app.include_router(rbac.router, prefix=settings.API_VER)
+
+
+# uvicorn {{cookiecutter.project_name}}.main:app --host 127.0.0.1 --port 5000 --reload
+if __name__ == "__main__":  # pragma: no cover
     import uvicorn
 
     uvicorn.run(

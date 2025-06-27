@@ -6,12 +6,13 @@ services:
       context: .
       dockerfile: $PWD/app/Dockerfile
     environment:
-      - ENV_STATE=dev
-    command: /bin/sh -c "while sleep 1000; do :; done"
+      - ENV_STATE=test
+    volumes:
+      - $PWD/{{cookiecutter.project_name}}:/app
+      - $PWD/log/supervisor:/var/log/supervisor
     depends_on:
       - mongo
       - redis
-
   nginx:
     container_name: nginx
     image: nginx:stable-alpine

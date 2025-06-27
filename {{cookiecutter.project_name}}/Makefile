@@ -25,13 +25,13 @@ rebuild-lockfiles: .pdm
 
 .PHONY: format  ## Auto-format python source files
 format: .pdm
-	pdm run ruff --fix $(source)
-	pdm run ruff format $(source)
+	pdm run ruff check --fix $(source) tests
+	pdm run ruff format $(source) tests
 
 .PHONY: lint  ## Lint python source files
 lint: .pdm
-	pdm run ruff $(source)
-	pdm run ruff format --check $(source)
+	pdm run ruff check $(source) tests
+	pdm run ruff format --check $(source) tests
 
 .PHONY: codespell  ## Use Codespell to do spellchecking
 codespell: .pre-commit
@@ -43,18 +43,21 @@ typecheck: .pre-commit .pdm
 
 .PHONY: test  ## Run all tests, skipping the type-checker integration tests
 test: .pdm
-	cd $(source);pdm run coverage run -m pytest -vs $(tests)  --durations=10
+	pdm run coverage run -m pytest -vs $(tests)  --durations=10
 
 .PHONY: testcov  ## Run tests and generate a coverage report, skipping the type-checker integration tests
 testcov: test
 	@echo "building coverage html"
-	cd $(source);pdm run coverage html
+	pdm run coverage html
 	@echo "building coverage lcov"
-	cd $(source);pdm run coverage lcov
+	pdm run coverage lcov
 
+.PHONY: mypy  ## Run type-checker imypy
+mypy: .pdm
+	pdm run mypy $(source)
 
 .PHONY: all  ## Run the standard set of checks performed in CI
-all: lint typecheck codespell testcov
+all: format lint typecheck codespell testcov
 
 .PHONY: help  ## Display this message
 help:

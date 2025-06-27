@@ -1,37 +1,34 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, Path
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, EmailStr
 from pydantic.fields import Field
 
 from {{cookiecutter.project_name}}.db import engine
-from {{cookiecutter.project_name}}.models.user import SimpleUser, User, UserID
+from {{cookiecutter.project_name}}.models.user import SimpleUser, User
 from {{cookiecutter.project_name}}.rbac.model import RoleName
-from {{cookiecutter.project_name}}.schemas import APIState, PageResp, PaginationQuery, Resp
+from {{cookiecutter.project_name}}.schemas import PageResp, PaginationQuery, Resp
+from {{cookiecutter.project_name}}.schemas.errors import DataExistedError, OperateInvalidError
 from {{cookiecutter.project_name}}.services.security import (
     auth_admin,
     get_password_hash,
     is_admin,
 )
+from {{cookiecutter.project_name}}.services.user_service import Nickname, PathUser, user_exists
 from {{cookiecutter.project_name}}.settings import settings
 from {{cookiecutter.project_name}}.utils import random_password
 
 router = APIRouter(
     prefix="/admin",
     tags=["ADMIN"],
+    dependencies=[Depends(auth_admin)],
 )
 
 
 class CreateUser(BaseModel):
     email: EmailStr = Field(..., description="邮箱")
-    nickname: str = Field(
-        ...,
-        max_length=10,
-        min_length=2,
-        pattern=settings.USERNAME_REGEX,
-        description="姓名",
-    )
+    nickname: Nickname
 
 
 @router.post(
@@ -39,29 +36,21 @@ class CreateUser(BaseModel):
     summary="管理员创建用户",
     name="admin:users",
 )
-async def creat_user(
-    body: CreateUser = Body(), _=Depends(auth_admin)
-) -> Resp[SimpleUser]:
+async def creat_user(body: CreateUser = Body()) -> Resp[SimpleUser]:
     # 密码加密使用原生加密方式
-    password = get_password_hash("123456")
+    if await user_exists(email=body.email):
+        raise DataExistedError(f"User(email={body.email})")
+
+    password = get_password_hash(random_password(8))
     user = User(nickname=body.nickname, email=body.email, hashed_password=password)  # type: ignore
     await engine.save(user)
-    user = await engine.find_one(SimpleUser, SimpleUser.email == body.email)
-    return Resp(data=user)
+    return Resp(data=SimpleUser.validate(user.model_dump()))
 
 
 class UserInfo(BaseModel):
-    password: Optional[str] = Field(
-        None, pattern=settings.PASSWORD_REGEX, description="密码"
-    )
+    password: Optional[str] = Field(None, pattern=settings.PASSWORD_REGEX, description="密码")
     enabled: Optional[bool] = None
-    nickname: str = Field(
-        None,
-        max_length=10,
-        min_length=2,
-        pattern=settings.USERNAME_REGEX,
-        description="姓名",
-    )
+    nickname: Optional[Nickname]
 
 
 @router.put(
@@ -70,14 +59,9 @@ class UserInfo(BaseModel):
     name="admin:users",
 )
 async def admin_edit_user(
-    id: UserID = Path(..., description="用户id"),
+    user: PathUser,
     body: UserInfo = Body(...),
-    _=Depends(auth_admin),
 ) -> Resp[SimpleUser]:
-    user = await engine.find_one(User, User.id == id)
-    if user is None:  # pragma: no cover
-        return Resp(code=APIState.DATA_EXISTED, msg=f"user does not exist:{id}")
-
     if body.nickname is not None:
         user.nickname = body.nickname
     if body.password is not None:
@@ -95,12 +79,8 @@ async def admin_edit_user(
     name="admin:reset-password",
 )
 async def reset_password(
-    id: UserID = Path(..., description="用户id"),
-    _=Depends(auth_admin),
+    user: PathUser,
 ) -> Resp[str]:
-    user = await engine.find_one(User, User.id == id)
-    if user is None:  # pragma: no cover
-        return Resp(code=APIState.DATA_EXISTED, msg=f"user does not exist:{id}")
     password = random_password(8)
     user.hashed_password = get_password_hash(password)
     await engine.save(user)
@@ -113,17 +93,13 @@ async def reset_password(
     name="admin:users",
 )
 async def admin_delete_user(
-    id: UserID = Path(..., description="用户id"),
-    _=Depends(auth_admin),
+    user: PathUser,
 ) -> Resp[None]:
-    user = await engine.find_one(User, User.id == id)
-    if user is None:  # pragma: no cover
-        return Resp(code=APIState.DATA_EXISTED, msg=f"user does not exist:{id}")
     if await is_admin(user):  # pragma: no cover
-        return Resp(code=APIState.PERMISSION_DENIED, msg="Not enough permissions")
+        raise OperateInvalidError("Cannot delete admin user")
     user.deleted = int(datetime.now().timestamp())
     await engine.save(user)
-    return Resp()
+    return Resp(data=None)
 
 
 class UsersQuery(PaginationQuery):
@@ -139,9 +115,6 @@ class UsersQuery(PaginationQuery):
     summary="管理员获取用户列表",
     name="admin:users",
 )
-async def user_system_list(
-    query: UsersQuery = Depends(),
-    _=Depends(auth_admin),
-) -> PageResp[SimpleUser]:
+async def get_users(query: UsersQuery = Depends()) -> PageResp[SimpleUser]:
     extra_query: Dict[str, Any] = {"deleted": 0}
     return await engine.find_pagination(SimpleUser, query, extra_query)
