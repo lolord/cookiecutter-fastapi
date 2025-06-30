@@ -68,7 +68,10 @@ class Settings(BaseSettings):
 
     # Statics Path
     BASE_DIR: ClassVar[str] = BASE_DIR
-    STATICS_DIR: str = os.path.join(BASE_DIR, "statics")
+
+    @property
+    def STATICS_DIR(self) -> str:  # pragma: no cover
+        return os.path.join(BASE_DIR, self.PROJECT_NAME, "statics")
 
     # COS
     ALLOW_ORIGINS: List[str] = ["*"]

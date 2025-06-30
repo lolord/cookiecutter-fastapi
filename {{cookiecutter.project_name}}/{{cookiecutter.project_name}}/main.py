@@ -1,4 +1,3 @@
-import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -40,8 +39,7 @@ app = FastAPI(
     default_response_class=ORJSONResponse,
 )
 
-statics = os.path.join(os.path.basename(__name__), settings.PROJECT_NAME, "statics")
-app.mount("/statics", StaticFiles(directory=statics), name="statics")
+app.mount("/statics", StaticFiles(directory=settings.STATICS_DIR), name="statics")
 
 
 @app.exception_handler(RequestValidationError)
