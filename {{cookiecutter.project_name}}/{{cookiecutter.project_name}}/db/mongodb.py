@@ -73,6 +73,7 @@ async def get_query_expression(
 ) -> dict:
     if isinstance(query, BaseModel):
         query_dict = query.model_dump(
+            mode="json",
             exclude_unset=True,
             exclude_none=True,
             exclude={"page", "page_size", "sort_by", "sort_order", "q", "keys"},
@@ -86,7 +87,7 @@ async def get_query_expression(
 
     if extra_query:
         if isinstance(extra_query, BaseModel):
-            query_dict.update(extra_query.model_dump())
+            query_dict.update(extra_query.model_dump(mode="json"))
         if isinstance(extra_query, dict):
             query_dict.update(extra_query)
 
@@ -233,7 +234,7 @@ class AIOEngine(ODMAIOEngine):
         model: Type[ModelType] = type(instance)
         old = await self.find_one(model, *queries)
         if old and instance.id != old.id:
-            old.model_update(instance.model_dump(exclude={model.__primary_field__, "id"}))
+            old.model_update(instance.model_dump(mode="json", exclude={model.__primary_field__, "id"}))
             return await self.save(old)
         else:
             return await self.save(instance)

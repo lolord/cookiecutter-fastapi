@@ -11,12 +11,7 @@ from {{cookiecutter.project_name}}.schemas.errors import DataInvalidError
 from {{cookiecutter.project_name}}.schemas.request import PaginationQuery
 
 
-class TestQueryModel(BaseModel):
-    email: str | None = None
-    nickname: str | None = None
-
-
-class TestPaginationQuery(PaginationQuery):
+class QueryModel(BaseModel):
     email: str | None = None
     nickname: str | None = None
 
@@ -100,7 +95,7 @@ async def test_advanced_query_empty():
 
 @pytest.mark.asyncio
 async def test_get_query_expression_base_model():
-    query = TestQueryModel(email="test@test.com", nickname="test")
+    query = QueryModel(email="test@test.com", nickname="test")
     result = await get_query_expression(User, query)
     assert result == snapshot({"email": "test@test.com", "nickname": "test"})
 
@@ -114,6 +109,10 @@ async def test_get_query_expression_dict():
 
 @pytest.mark.asyncio
 async def test_get_query_expression_pagination_query():
+    class TestPaginationQuery(PaginationQuery):
+        email: str | None = None
+        nickname: str | None = None
+
     query = TestPaginationQuery(email="test@test.com", nickname="test")
     result = await get_query_expression(User, query)
     assert result == snapshot({"email": "test@test.com", "nickname": "test"})
@@ -128,7 +127,7 @@ async def test_get_query_expression_none():
 @pytest.mark.asyncio
 async def test_get_query_expression_extra_query_base_model():
     query = PaginationQuery()
-    extra_query = TestQueryModel(email="test@test.com", nickname="test")
+    extra_query = QueryModel(email="test@test.com", nickname="test")
     result = await get_query_expression(User, query, extra_query)
     assert result == snapshot({"email": "test@test.com", "nickname": "test"})
 
